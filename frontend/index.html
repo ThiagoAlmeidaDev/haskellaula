@@ -1,0 +1,96 @@
+<!doctype html>
+<!-- Casca única do Recall: barra de navegação, região principal onde as views desenham, gaveta
+     lateral, avisos e diálogos compartilhados. O body leva data-sessao; o html leva data-tema. -->
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#2448f5">
+  <title>Recall</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 40 40'%3E%3Crect x='5' y='8' width='22' height='28' rx='5' transform='rotate(-14 16 22)' fill='%23ffc328' stroke='%23000' stroke-width='2.5'/%3E%3Crect x='13' y='5' width='22' height='28' rx='5' fill='%232448f5' stroke='%23000' stroke-width='2.5'/%3E%3Cpath d='M20 25V13h4.5a3.5 3.5 0 0 1 0 7H20m4 0 4 5' fill='none' stroke='%23fff' stroke-width='2.6' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,400..900&family=Newsreader:opsz,wght@6..72,400;6..72,600&family=Patrick+Hand&display=swap">
+  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="landing.css">
+  <script type="module" src="app.js"></script>
+</head>
+<body data-sessao="carregando">
+  <a class="skip" href="#conteudo">Pular para o conteúdo</a>
+
+  <header class="nav-wrap">
+    <nav class="nav" aria-label="Principal">
+      <a class="logo" href="#/" aria-label="Recall, início" data-logo>
+        <span>Recall</span>
+      </a>
+      <div class="nav-links" data-so="conta">
+        <a class="nav-link" href="#/" data-nav="inicio">Início</a>
+        <a class="nav-link" href="#/baralhos" data-nav="baralhos">Baralhos</a>
+        <a class="nav-link" href="#/estudar" data-nav="estudar">Estudar <span class="nav-contagem" data-contagem-dia hidden></span></a>
+      </div>
+      <button class="nav-cmd" data-so="conta" type="button" data-acao="paleta" aria-haspopup="dialog" aria-label="Abrir busca e comandos" aria-keyshortcuts="Control+K Meta+K">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/></svg>
+        <span class="nav-cmd-label">Buscar</span>
+        <kbd data-atalho-paleta>Ctrl K</kbd>
+      </button>
+      <button class="avatar" data-so="conta" data-acao="conta" type="button" popovertarget="menu-conta" aria-label="Conta"></button>
+      <div class="nav-visitante" data-so="visitante">
+        <a class="nav-link" href="#/entrar" data-nav="entrar">Entrar</a>
+        <a class="btn btn-pri btn-sm" href="#/criar-conta" data-nav="criar-conta">Criar conta</a>
+      </div>
+    </nav>
+  </header>
+
+  <main id="conteudo" class="main" tabindex="-1"></main>
+
+  <div class="menu-conta" id="menu-conta" popover>
+    <p class="menu-nome"></p>
+    <p class="menu-email"></p>
+    <a class="menu-item" href="#/preferencias" data-acao="preferencias">
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M3 4.5h6"/><path d="M12 4.5h1"/><circle cx="10.5" cy="4.5" r="1.5"/><path d="M3 11.5h1"/><path d="M7 11.5h6"/><circle cx="5.5" cy="11.5" r="1.5"/></svg>
+      Preferências
+    </a>
+    <button class="menu-item" type="button" data-acao="sair">
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="M6.5 2.75h-3v10.5h3"/><path d="M10 5l3 3-3 3"/><path d="M13 8H6.5"/></svg>
+      Sair da conta
+    </button>
+  </div>
+
+  <div class="toasts" aria-live="polite" aria-relevant="additions"></div>
+
+  <dialog class="gaveta" aria-labelledby="gaveta-titulo">
+    <header class="gaveta-cabeca">
+      <h2 class="gaveta-titulo" id="gaveta-titulo"></h2>
+      <button class="btn-icone" type="button" data-acao="fechar-gaveta" aria-label="Fechar">
+        <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><path d="m4 4 8 8"/><path d="m12 4-8 8"/></svg>
+      </button>
+    </header>
+    <div class="gaveta-conteudo"></div>
+  </dialog>
+
+  <dialog class="paleta" aria-label="Busca e comandos">
+    <div class="paleta-campo">
+      <svg class="icon" viewBox="0 0 16 16" aria-hidden="true"><circle cx="7" cy="7" r="4.25"/><path d="m10.25 10.25 3 3"/></svg>
+      <input class="paleta-input" type="text" role="combobox" aria-expanded="true" aria-controls="paleta-lista"
+             aria-autocomplete="list" autocomplete="off" spellcheck="false" placeholder="Buscar baralhos e ações">
+      <kbd>Esc</kbd>
+    </div>
+    <ul class="paleta-lista" id="paleta-lista" role="listbox" aria-label="Resultados"></ul>
+    <div class="paleta-rodape" aria-hidden="true">
+      <span><kbd>↑</kbd><kbd>↓</kbd> navegar</span>
+      <span><kbd>↵</kbd> abrir</span>
+      <span><kbd>Esc</kbd> fechar</span>
+    </div>
+  </dialog>
+
+  <dialog class="confirmar" aria-labelledby="confirmar-titulo" aria-describedby="confirmar-texto">
+    <h2 id="confirmar-titulo" class="confirmar-titulo"></h2>
+    <p id="confirmar-texto" class="confirmar-texto"></p>
+    <div class="confirmar-acoes">
+      <button class="btn btn-sec" type="button" value="cancelar">Cancelar</button>
+      <button class="btn btn-perigo" type="button" value="ok"></button>
+    </div>
+  </dialog>
+</body>
+</html>

@@ -1,0 +1,25 @@
+# Ambiente do Codespaces: o container de desenvolvimento (app) divide a rede com o PostgreSQL (db),
+# então o banco responde em localhost:5432 e o DATABASE_URL padrão do Main.hs funciona sem ajuste.
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    volumes:
+      - ../..:/workspaces:cached
+    command: sleep infinity
+    network_mode: service:db
+
+  db:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: flashcards
+      POSTGRES_USER: flashcards
+      POSTGRES_PASSWORD: flashcards
+    volumes:
+      - ../db/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
+      - dados:/var/lib/postgresql/data
+
+volumes:
+  dados:

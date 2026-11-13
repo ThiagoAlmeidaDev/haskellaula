@@ -1,0 +1,3 @@
+import{gsap as e,Power0 as r,Power1 as a,Power2 as s,Power3 as o,Power4 as g,Linear as i,Quad as p,Cubic as t,Quart as m,Quint as n,Strong as f,Elastic as l,Back as u,SteppedEase as c,Bounce as j,Sine as w,Expo as x,Circ as P,TweenLite as S,TimelineLite as T,TimelineMax as d}from"./gsap-core.js";import{CSSPlugin as v}from"./CSSPlugin.js";var C=e.registerPlugin(v)||e,
+// to protect from tree shaking
+M=C.core.Tween;export{C as gsap,C as default,v as CSSPlugin,M as TweenMax,S as TweenLite,d as TimelineMax,T as TimelineLite,r as Power0,a as Power1,s as Power2,o as Power3,g as Power4,i as Linear,p as Quad,t as Cubic,m as Quart,n as Quint,f as Strong,l as Elastic,u as Back,c as SteppedEase,j as Bounce,w as Sine,x as Expo,P as Circ};

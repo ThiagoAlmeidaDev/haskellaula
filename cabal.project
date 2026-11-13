@@ -1,0 +1,2 @@
+-- Projeto cabal de um pacote só (haskellaula.cabal, nesta pasta).
+packages: .

@@ -1,7 +1,7 @@
 cabal-version:      3.0
 name:               haskellaula
 version:            0.1.0.0
--- synopsis:
+synopsis:           Flashcards com repetição espaçada (SM-2)
 -- description:
 license:            BSD-3-Clause
 license-file:       LICENSE
@@ -19,8 +19,18 @@ common warnings
 executable haskellaula
     import:           warnings
     main-is:          Main.hs
-    -- other-modules:
+    ghc-options:      -threaded
+    other-modules:    Nucleo.SM2, Nucleo.Types, Nucleo.Stats, Nucleo.Conta, Nucleo.Preferencias, Banco.Baralhos, Banco.Contas, Banco.Preferencias, Web.Api, Web.Comum, Web.Sessao, Web.Contas, Web.Baralhos, Web.Server
     -- other-extensions:
-    build-depends:    base, servant, servant-server, warp
+    build-depends:    base, servant, servant-server, warp, aeson, text, time, postgresql-simple, bytestring, scientific, wai, http-types, resource-pool, containers, crypton, ram
     hs-source-dirs:   app
+    default-language: Haskell2010
+
+test-suite haskellaula-test
+    import:           warnings
+    type:             exitcode-stdio-1.0
+    main-is:          Spec.hs
+    other-modules:    Nucleo.SM2, Nucleo.Types, Nucleo.Stats, Nucleo.Conta, Nucleo.Preferencias
+    build-depends:    base, hspec, QuickCheck, time, aeson, text, scientific, bytestring, containers
+    hs-source-dirs:   test app
     default-language: Haskell2010
