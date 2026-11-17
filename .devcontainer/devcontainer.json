@@ -8,7 +8,14 @@
         "8080": { "label": "Recall" },
         "5432": { "label": "PostgreSQL", "onAutoForward": "ignore" }
     },
+    "containerEnv": {
+        "TZ": "America/Sao_Paulo"
+    },
+    "features": {
+        "ghcr.io/devcontainers/features/sshd:1": {}
+    },
     "postCreateCommand": "cabal update && cabal build all",
+    "postStartCommand": "bash .devcontainer/iniciar-servidor.sh",
     "customizations": {
         "vscode": {
             "extensions": ["haskell.haskell"]

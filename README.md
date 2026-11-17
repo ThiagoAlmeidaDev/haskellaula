@@ -176,18 +176,21 @@ das dependências ficam travadas em `cabal.project.freeze`, as mesmas que passar
 2. Espere a criação terminar. Ela roda `cabal update && cabal build all` sozinha; da primeira vez
    isso compila todas as dependências e leva cerca de 6 minutos numa máquina de 4 núcleos (numa
    de 2 núcleos, o dobro).
-3. No terminal, na raiz do projeto: `cabal run haskellaula`.
+3. O servidor sobe sozinho toda vez que o Codespace liga (`.devcontainer/iniciar-servidor.sh`,
+   no `postStartCommand`), com o fuso `America/Sao_Paulo`. A saída fica em `/tmp/recall.log`
+   (`tail -f /tmp/recall.log`).
 4. Na aba **Ports**, abra a porta **8080** no navegador. O endereço tem o formato
    `https://<nome-do-codespace>-8080.app.github.dev`. Por padrão a porta é privada (só abre para
    a sua conta do GitHub); para outra pessoa acessar, clique com o botão direito nela e escolha
-   **Port Visibility → Public**.
+   **Port Visibility → Public** (ou `gh codespace ports visibility 8080:public -c <nome>`).
 
 > [!IMPORTANT]
-> O Codespace desliga depois de 30 minutos sem uso, e o servidor cai junto. Para deixar pronto
-> com antecedência, aumente o limite em **GitHub → Settings → Codespaces → Default idle timeout**
-> (até 240 minutos). Se ele desligar, basta abrir de novo e rodar `cabal run haskellaula`: o que
-> já foi compilado continua lá. Evite **Rebuild Container**, que apaga o cache de pacotes do cabal
-> e obriga a compilar as dependências de novo.
+> O Codespace desliga depois de 30 minutos sem uso, e o servidor cai junto. Acesso de visitantes
+> ao site não conta como uso: só terminal e editor. Para deixar pronto com antecedência, aumente
+> o limite em **GitHub → Settings → Codespaces → Default idle timeout** (até 240 minutos), ou crie
+> com `gh codespace create -R <dono>/<repo> --idle-timeout 240m`. Se ele desligar, basta abrir de
+> novo: o servidor volta sozinho e o que já foi compilado continua lá. Evite **Rebuild
+> Container**, que apaga o cache de pacotes do cabal e obriga a compilar as dependências de novo.
 
 ### Testes
 
