@@ -1,122 +1,158 @@
-# Recall: flashcards com repetição espaçada
+# Recall
 
-Trabalho realizado para a matéria de **Haskell**. O Recall é um site para estudar com flashcards:
-cada pessoa cria a sua conta, monta baralhos de cartões (pergunta e resposta) e estuda um pouco
-por dia. Cada resposta recebe uma nota, e o algoritmo **SM-2** decide quando aquele cartão volta:
-o que você erra volta amanhã, o que você domina demora cada vez mais para voltar.
+Site de flashcards com repetição espaçada, desenvolvido como trabalho da disciplina de Haskell.
 
-O backend é todo em Haskell (Servant, warp e PostgreSQL), e o mesmo executável serve o frontend
-em HTML, CSS e JavaScript puro.
+A proposta é a mesma de aplicativos como o Anki. Cada pessoa cria a sua conta, monta baralhos de
+cartões com pergunta e resposta e estuda um pouco por dia. Depois de ver a resposta, ela indica o
+quanto lembrou (Errei, Difícil, Bom ou Fácil), e o algoritmo SM-2 usa essa nota para decidir
+quando o cartão aparece de novo. Um cartão errado volta no dia seguinte, enquanto os que já estão
+bem fixados aparecem com intervalos cada vez maiores.
 
-## 1. Visão geral
+O backend é escrito em Haskell, com [Servant](https://docs.servant.dev/) e PostgreSQL. O mesmo
+executável também entrega o frontend, feito em HTML, CSS e JavaScript sem framework e sem etapa
+de build.
+
+## Telas
+
+| Tela                                            | Acesso    | O que faz                                                                                        |
+| ----------------------------------------------- | --------- | ------------------------------------------------------------------------------------------------ |
+| `#/`                                            | visitante | Página de apresentação, com um maço de cartas em 3D e demonstrações animadas do método.          |
+| `#/entrar`, `#/criar-conta`                     | visitante | Login e cadastro.                                                                                |
+| `#/`                                            | conta     | Painel com os cartões que vencem hoje, a sequência de dias de estudo e a agenda dos próximos 14 dias. |
+| `#/baralhos`                                    | conta     | Lista de baralhos, com busca, ordenação e capa personalizada (cor e estampa).                    |
+| `#/baralho/:id`                                 | conta     | Cartões do baralho, com filtro por etapa (novo, aprendendo, dominado), importação de CSV/TXT e exportação. |
+| `#/estudar`, `#/estudar/todos`, `#/estudar/:id` | conta     | Sessão de estudo de um baralho ou de todos. No final, os cartões errados podem ser revistos sem valer nota. |
+| `#/estatisticas/:id`                            | conta     | Taxa de acerto, previsão da semana, revisões do último mês e os cartões com a facilidade mais baixa. |
+| `#/preferencias`                                | conta     | Fonte e tamanho do texto, tema claro ou escuro e o jeito de mostrar a resposta.                  |
+
+Na sessão de estudo dá para usar só o teclado: `Espaço` mostra a resposta, as teclas `1` a `4`
+respondem, `S` pula o cartão e `E` abre a edição. Com a conta aberta, `Ctrl+K` (`⌘K` no Mac)
+abre uma paleta de comandos para navegar entre as telas.
+
+## Como o código está organizado
+
+O backend fica em `app/` e é dividido em três camadas, e as dependências sempre vão das bordas
+para o centro:
 
 ```txt
- Navegador ──► warp (porta 8080) ──► Servant ──┬──► /api/*  handlers (Web/) ──► Banco/ ──► PostgreSQL 16
-                                               │              │                            (Docker Compose)
-                                               │              └──► Nucleo/  (regras puras: SM-2, validação,
-                                               │                             estatísticas)
-                                               └──► /*      arquivos de frontend/ (sem build)
+Main ──► Web ──► Banco ──► Nucleo
 ```
 
-- **Backend (`app/`):** Haskell com [Servant](https://docs.servant.dev/) e warp. A API inteira é
-  um tipo Servant (`Web/Api.hs`), e o compilador confere se os handlers batem com ela.
-- **Núcleo puro (`app/Nucleo/`):** SM-2, validação de entrada, JSON e estatísticas. Não faz IO,
-  não lê o relógio nem o banco: "hoje" chega como argumento. É o que o test-suite compila.
-- **Banco:** PostgreSQL 16 via Docker Compose, acessado com `postgresql-simple` e um pool de
-  conexões (`resource-pool`). O schema está em `db/schema.sql`.
-- **Frontend (`frontend/`):** HTML, CSS e JavaScript puro, servido pelo próprio executável em `/`.
-  A landing usa GSAP, Lenis e three.js, que ficam versionados em `frontend/vendor/`.
+- **`Nucleo/`** reúne as regras do sistema: o SM-2, a validação do que chega do usuário, a
+  conversão de e para JSON e o cálculo das estatísticas. Tudo ali é puro, sem acesso a banco,
+  relógio ou rede. Até a data de "hoje" chega como argumento, o que permite testar essas regras
+  com qualquer data e sem precisar de um banco rodando.
+- **`Banco/`** guarda as consultas SQL, escritas com `postgresql-simple`. As conexões vêm de um
+  pool (`resource-pool`), para não abrir uma conexão nova a cada requisição.
+- **`Web/`** é a parte HTTP. Em `Web/Api.hs` a API inteira é descrita como um tipo do Servant, e
+  o compilador confere se os handlers implementam exatamente aquelas rotas. Os handlers de
+  baralhos e cartões seguem sempre a mesma ordem: conferem a sessão, validam o corpo da requisição, buscam o que precisa
+  existir, aplicam a regra do `Nucleo` e gravam o resultado.
 
-## 2. Contas e sessões
+Para quem for ler o código pela primeira vez, uma boa ordem é começar por `Nucleo/SM2.hs`, que é
+curto e concentra a ideia do projeto, seguir para `Web/Api.hs` para ver todas as rotas e, por
+fim, abrir `Web/Baralhos.hs`, onde as três camadas aparecem juntas.
 
-- Cadastro com nome, e-mail e senha. A senha precisa de 8 caracteres a 72 bytes, com letra
-  maiúscula, minúscula, número e símbolo, e vai para o banco só como hash **bcrypt** (custo 12).
-- O e-mail é guardado sem espaços nas pontas e em minúsculas: `Ana@X.com` e `ana@x.com` são a
-  mesma conta.
-- A sessão é um token aleatório de 32 bytes no cookie `recall_sessao` (`HttpOnly`,
-  `SameSite=Strict`, 30 dias). O banco guarda só o **SHA-256** do token: quem lê o banco não
-  consegue se passar pela pessoa.
-- Cada baralho tem dono. Baralho ou cartão de outra conta responde **404**, igual a um id que não
-  existe.
-- Login errado tem a mesma mensagem para e-mail desconhecido e senha errada.
+O frontend fica em `frontend/`. A aplicação é uma página única com roteamento por hash
+(`app.js`), e cada tela tem o seu módulo em `js/views/`. A página de apresentação usa GSAP, Lenis
+e three.js, que já estão prontos em `frontend/vendor/`, então o projeto não tem `npm install` nem
+bundler.
 
-## 3. Telas
+```txt
+app/
+  Main.hs        lê o DATABASE_URL, abre o pool e sobe o servidor na porta 8080
+  Nucleo/        regras puras: SM2, Types, Stats, Conta, Preferencias
+  Banco/         consultas ao PostgreSQL
+  Web/           rotas, sessão e entrega dos arquivos estáticos
+test/Spec.hs     testes do Nucleo (hspec + QuickCheck)
+scripts/smoke.sh testes da API de ponta a ponta, com curl
+db/schema.sql    tabelas do banco
+frontend/        HTML, CSS e JavaScript do site
+.devcontainer/   ambiente para o GitHub Codespaces
+```
 
-| Tela                     | Quem vê   | O que faz                                                                                     |
-| ------------------------ | --------- | --------------------------------------------------------------------------------------------- |
-| `#/`                     | visitante | Apresentação animada: maço de cartas em 3D, curva do esquecimento, sessão demonstrada, calendário de revisões e a carta "do seu jeito". |
-| `#/entrar`, `#/criar-conta` | visitante | Login e cadastro, com a regra da senha marcada enquanto se digita.                        |
-| `#/`                     | conta     | Painel: cartões que esperam hoje, "Estudar tudo", sequência de dias e os próximos 14 dias.   |
-| `#/baralhos`             | conta     | Baralhos com busca, ordenação, capa (cor e estampa), criar, editar e excluir.                 |
-| `#/baralho/:id`          | conta     | Cartões do baralho com filtros por etapa (novo, aprendendo, dominado), busca, adicionar um a um, colar uma lista, importar CSV/TXT e exportar. |
-| `#/estudar`, `#/estudar/todos`, `#/estudar/:id` | conta | Sessão de estudo: `Espaço` mostra a resposta, `1` a `4` respondem (Errei, Difícil, Bom, Fácil), `S` pula, `E` edita. No fim, os errados podem ser revistos em treino. |
-| `#/estatisticas/:id`     | conta     | Taxa de acerto, previsão de 7 dias, revisões dos últimos 30 dias e cartões difíceis.          |
-| `#/preferencias`         | conta     | Tamanho e fonte do texto, virar a carta ou mostrar embaixo, pergunta visível, embaralhar e tema claro/escuro, com prévia ao vivo. |
+## O algoritmo SM-2
 
-`Ctrl+K` (ou `⌘K`) abre a paleta de comandos. Todo texto vindo do usuário entra na página como
-texto (`textContent`), nunca como HTML.
+O SM-2 foi criado por Piotr Wozniak em 1987 para o SuperMemo e é a base do agendamento de vários
+programas de flashcards. Cada cartão guarda três números: a **facilidade** (começa em 2,5), o
+**intervalo** em dias até a próxima revisão e quantas **repetições** seguidas a pessoa acertou.
 
-## 4. Como funciona o SM-2
+A cada resposta, a nota `q` vai de 0 a 5. Os botões Errei, Difícil, Bom e Fácil enviam 1, 3, 4 e
+5. Com ela, a facilidade é recalculada por esta fórmula, sem nunca ficar abaixo de 1,3:
 
-A cada resposta o cartão recalcula o próprio estado em
-[app/Nucleo/SM2.hs](app/Nucleo/SM2.hs), a partir de uma **nota** de 0 a 5 (os botões Errei,
-Difícil, Bom e Fácil mandam 1, 3, 4 e 5):
+```txt
+EF' = EF + (0,1 − (5 − q) × (0,08 + (5 − q) × 0,02))
+```
 
-| Campo            | Começa em | Regra                                                                            |
-| ---------------- | --------- | -------------------------------------------------------------------------------- |
-| `facilidade`     | 2,5       | `EF' = EF + (0,1 − (5−q)·(0,08 + (5−q)·0,02))`, nunca abaixo de 1,3               |
-| `repeticoes`     | 0         | Nota menor que 3 zera; nota 3 ou mais soma 1                                     |
-| `intervalo`      | 0         | Nota menor que 3: 1 dia. Senão, 1 dia na 1ª, 6 dias na 2ª e `intervalo × EF'` depois |
-| `proximaRevisao` | hoje      | hoje + intervalo                                                                 |
+Uma nota menor que 3 conta como erro: as repetições voltam a zero e o cartão reaparece no dia
+seguinte. Nos acertos, o primeiro intervalo é de 1 dia, o segundo de 6 dias e, a partir daí, o
+intervalo anterior é multiplicado pela nova facilidade. Por exemplo, um cartão novo respondido
+com 4, 4 e 5 volta depois de 1, 6 e 16 dias.
 
-Exemplo: um cartão novo respondido com notas 4, 4 e 5 volta em 1, 6 e 16 dias. "Hoje" é sempre o
-dia local do servidor.
+Nesta implementação, o intervalo é contado a partir do dia da resposta, e não da data em que o
+cartão estava agendado. Assim, quem fica alguns dias sem estudar não é penalizado pelo atraso. A
+implementação completa está em [app/Nucleo/SM2.hs](app/Nucleo/SM2.hs).
 
-## 5. Conceitos de Haskell usados
+## Contas e sessões
 
-| Conceito                      | Onde                                                                                          |
-| ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `newtype` + smart constructor | `Nota` em `Nucleo/SM2.hs`: o construtor não é exportado, e `mkNota` só devolve `Just` para 0 a 5 |
-| Guards e `where`              | `responder` em `Nucleo/SM2.hs`, `validarSenha` em `Nucleo/Conta.hs`                           |
-| `Maybe` e `Either`            | Validação em `Nucleo/` (`Either Text`) e busca por id em `Banco/` (`Maybe` vira 404)          |
-| `Applicative`                 | `validarNovaConta` junta nome, e-mail e senha com `<$>` e `<*>`, parando no primeiro erro     |
-| Typeclasses e instâncias      | `ToJSON`/`FromJSON` escritas à mão em `Nucleo/`                                               |
-| Semigroup e Monoid            | `Placar` em `Nucleo/Stats.hs`: soma revisões e acertos numa passada só, com `foldMap`         |
-| `Data.Set` e listas infinitas | `calcularResumo`: a sequência de dias é um `takeWhile` sobre `[hoje, ontem, ...]`             |
-| Programação no nível de tipos | `Web/Api.hs`: a API é um tipo, e o compilador confere os handlers contra ela                  |
-| Núcleo puro e IO nas bordas   | `Nucleo/` é puro; `Banco/` e `Web/` fazem IO                                                  |
+A senha precisa ter pelo menos 8 caracteres, com letra maiúscula, minúscula, número e símbolo.
+No banco ela fica guardada apenas como hash bcrypt.
 
-## 6. API
+Depois do login, o navegador recebe um token aleatório num cookie `HttpOnly`, válido por 30 dias.
+O banco não guarda o token em si, só um hash SHA-256 dele. Assim, alguém com acesso ao banco não
+consegue usar os dados de lá para entrar na conta de outra pessoa.
 
-Todas as rotas ficam em `/api`. Os erros têm sempre o formato `{"erro": "mensagem"}`: **400**
-para dado inválido, **401** sem sessão ou com login errado, **404** para id que não existe (ou que
-é de outra conta) e **409** para conflito.
+Todo baralho pertence a uma conta. Pedir um baralho ou cartão de outra pessoa devolve 404, a
+mesma resposta de um id que não existe, para que a API não revele quais ids estão em uso.
 
-| Método   | Rota                             | O que faz                                                         |
+## Conceitos de Haskell usados
+
+A tabela abaixo aponta onde cada conceito visto na disciplina aparece no projeto.
+
+| Conceito                      | Onde aparece                                                                                       |
+| ----------------------------- | -------------------------------------------------------------------------------------------------- |
+| `newtype` e smart constructor | `Nota`, em `Nucleo/SM2.hs`. O construtor não é exportado, e `mkNota` só aceita valores de 0 a 5.    |
+| Guards e `where`              | `responder`, em `Nucleo/SM2.hs`, e `validarSenha`, em `Nucleo/Conta.hs`.                           |
+| `Maybe` e `Either`            | A validação em `Nucleo/` devolve `Either Text`. As buscas em `Banco/` devolvem `Maybe`, e `Nothing` vira 404. |
+| `Applicative`                 | `validarNovaConta` combina a validação de nome, e-mail e senha com `<$>` e `<*>`.                  |
+| Typeclasses e instâncias      | Instâncias de `ToJSON` e `FromJSON` escritas à mão em `Nucleo/`.                                   |
+| `Semigroup` e `Monoid`        | `Placar`, em `Nucleo/Stats.hs`, soma revisões e acertos numa única passada com `foldMap`.           |
+| `Data.Set` e listas infinitas | `calcularResumo` conta a sequência de dias com `takeWhile` sobre a lista `[hoje, ontem, ...]`.      |
+| Programação no nível de tipos | `Web/Api.hs` descreve a API como um tipo, e o compilador confere os handlers contra ele.            |
+| Código puro e IO separados    | `Nucleo/` é puro; o IO fica em `Banco/` e `Web/`.                                                  |
+
+## API
+
+Todas as rotas ficam sob `/api` e trocam JSON. Os erros seguem o formato `{"erro": "mensagem"}`,
+com o status 400 para dado inválido, 401 sem sessão ou com login errado, 404 para o que não
+existe (ou é de outra conta) e 409 para conflito.
+
+| Método   | Rota                             | Descrição                                                         |
 | -------- | -------------------------------- | ----------------------------------------------------------------- |
-| `GET`    | `/api/saude`                     | `{"banco":"ok"}` quando o banco responde                          |
-| `POST`   | `/api/contas`                    | cria a conta e já abre a sessão; 409 se o e-mail já existe        |
-| `POST`   | `/api/sessao`                    | login                                                             |
-| `GET`    | `/api/sessao`                    | usuário logado, ou `null`                                         |
-| `DELETE` | `/api/sessao`                    | sair                                                              |
-| `GET`    | `/api/resumo`                    | revisões de hoje, sequência de dias, atividade e próximos 14 dias |
-| `GET`    | `/api/preferencias`              | preferências de estudo (o padrão para quem nunca salvou)          |
-| `PUT`    | `/api/preferencias`              | salva as preferências                                             |
-| `GET`    | `/api/baralhos`                  | baralhos da conta, com total de cartões e quantos vencem hoje     |
-| `POST`   | `/api/baralhos`                  | cria baralho (`nome`, `descricao`, `cor`, `padrao`)               |
-| `GET`    | `/api/baralhos/:id`              | um baralho                                                        |
-| `PUT`    | `/api/baralhos/:id`              | edita o baralho                                                   |
-| `DELETE` | `/api/baralhos/:id`              | exclui o baralho, com os cartões e as revisões dele               |
-| `GET`    | `/api/baralhos/:id/cartoes`      | cartões do baralho                                                |
-| `POST`   | `/api/baralhos/:id/cartoes`      | cria cartão (`frente`, `verso`)                                   |
-| `PUT`    | `/api/cartoes/:id`               | edita o cartão (o estado do SM-2 não muda)                        |
-| `DELETE` | `/api/cartoes/:id`               | exclui o cartão                                                   |
-| `GET`    | `/api/baralhos/:id/revisar`      | cartões vencidos do baralho, cada um com a previsão de cada nota  |
-| `GET`    | `/api/revisar`                   | o mesmo, de todos os baralhos da conta                            |
-| `POST`   | `/api/cartoes/:id/responder`     | aplica a nota (`{nota}`, 0 a 5) e devolve o novo estado           |
-| `GET`    | `/api/baralhos/:id/estatisticas` | números do baralho, previsão, revisões por dia e cartões difíceis |
+| `GET`    | `/api/saude`                     | Confere se o banco está respondendo                               |
+| `POST`   | `/api/contas`                    | Cria a conta e já abre a sessão                                   |
+| `POST`   | `/api/sessao`                    | Login                                                             |
+| `GET`    | `/api/sessao`                    | Usuário logado, ou `null`                                         |
+| `DELETE` | `/api/sessao`                    | Logout                                                            |
+| `GET`    | `/api/resumo`                    | Revisões de hoje, sequência de dias, atividade e próximos 14 dias |
+| `GET`    | `/api/preferencias`              | Preferências de estudo                                            |
+| `PUT`    | `/api/preferencias`              | Salva as preferências                                             |
+| `GET`    | `/api/baralhos`                  | Baralhos da conta, com o total de cartões e quantos vencem hoje   |
+| `POST`   | `/api/baralhos`                  | Cria um baralho (`nome`, `descricao`, `cor`, `padrao`)            |
+| `GET`    | `/api/baralhos/:id`              | Um baralho                                                        |
+| `PUT`    | `/api/baralhos/:id`              | Edita o baralho                                                   |
+| `DELETE` | `/api/baralhos/:id`              | Exclui o baralho, junto com os cartões e o histórico de revisões  |
+| `GET`    | `/api/baralhos/:id/cartoes`      | Cartões do baralho                                                |
+| `POST`   | `/api/baralhos/:id/cartoes`      | Cria um cartão (`frente`, `verso`)                                |
+| `PUT`    | `/api/cartoes/:id`               | Edita o texto do cartão, sem alterar o agendamento                |
+| `DELETE` | `/api/cartoes/:id`               | Exclui o cartão                                                   |
+| `GET`    | `/api/baralhos/:id/revisar`      | Cartões do baralho que vencem hoje, com a previsão de cada nota   |
+| `GET`    | `/api/revisar`                   | O mesmo, considerando todos os baralhos da conta                  |
+| `POST`   | `/api/cartoes/:id/responder`     | Registra a resposta (`{"nota": 0..5}`) e devolve o novo estado    |
+| `GET`    | `/api/baralhos/:id/estatisticas` | Estatísticas do baralho                                           |
 
-Fora as cinco primeiras, todas exigem o cookie de sessão (sem ele, 401). Exemplo com `curl`:
+As cinco primeiras rotas funcionam sem login; as demais exigem o cookie de sessão. Um exemplo de
+uso com `curl`:
 
 ```sh
 curl -c sessao.txt -X POST localhost:8080/api/contas -H 'Content-Type: application/json' -d '{"nome":"Ana","email":"ana@exemplo.com","senha":"Segredo#123"}'
@@ -125,90 +161,87 @@ curl -b sessao.txt -X POST localhost:8080/api/baralhos/1/cartoes -H 'Content-Typ
 curl -b sessao.txt -X POST localhost:8080/api/cartoes/1/responder -H 'Content-Type: application/json' -d '{"nota":4}'
 ```
 
-## 7. Rodar e testar
+## Como rodar
 
-### Pré-requisitos
-
-- [ghcup](https://www.haskell.org/ghcup/) com GHC 9.10 e cabal 3.16
-- Docker Desktop (aberto, com o engine rodando)
-- No Windows, a `libpq` do MSYS2 que vem com o ghcup. O pacote `postgresql-libpq` precisa dela
-  para compilar, e o executável precisa da `libpq.dll` para rodar. Instale uma vez:
-
-  ```sh
-  ghcup run --mingw-path -- pacman -S --noconfirm mingw-w64-x86_64-postgresql
-  ```
-
-### Passo a passo (Git Bash, na raiz do repositório)
+São necessários o [ghcup](https://www.haskell.org/ghcup/) com GHC 9.10 e cabal 3.16, e o Docker
+para subir o PostgreSQL. Com isso instalado, na raiz do repositório:
 
 ```sh
-docker compose up -d                               # PostgreSQL; aplica db/schema.sql no primeiro boot
-export PATH="/c/ghcup/msys64/mingw64/bin:$PATH"    # só no Windows: pkg-config, pg_config e libpq.dll
+docker compose up -d
 cabal update
 cabal build
-cabal run haskellaula                              # serve em http://localhost:8080
+cabal run haskellaula
 ```
 
-Abra `http://localhost:8080` e crie a sua conta. O servidor procura o frontend em `frontend/`,
-então rode o `cabal run` na raiz do repositório.
+O site fica em <http://localhost:8080>. O `cabal run` precisa ser executado na raiz do
+repositório, porque o servidor procura os arquivos do site na pasta `frontend/`.
 
-| Variável       | Padrão                                                                           |
-| -------------- | -------------------------------------------------------------------------------- |
-| `DATABASE_URL` | `host=localhost port=5432 dbname=flashcards user=flashcards password=flashcards` |
+Na primeira vez que o banco sobe, o Docker cria as tabelas a partir de `db/schema.sql`. Esse
+script só roda com o volume vazio, então para recriar o banco do zero é preciso apagar o volume
+com `docker compose down -v`, o que também apaga todos os dados.
 
-A porta é fixa em 8080. As credenciais valem só para desenvolvimento e são as mesmas do
-[docker-compose.yml](docker-compose.yml).
+Por padrão, o servidor se conecta ao banco do `docker-compose.yml`. Para usar outro banco, defina
+a variável `DATABASE_URL`, no formato
+`host=localhost port=5432 dbname=flashcards user=flashcards password=flashcards`.
 
-> [!NOTE]
-> O Windows trava o `haskellaula.exe` enquanto ele roda. Antes de recompilar, pare o servidor
-> com `Ctrl+C` ou `taskkill //IM haskellaula.exe //F`.
+### Windows
 
-> [!WARNING]
-> O `db/schema.sql` só roda quando o volume do banco está vazio. Recriar o banco com
-> `docker compose down -v && docker compose up -d` **apaga todos os dados**.
-
-### No GitHub Codespaces
-
-O repositório traz um devcontainer em `.devcontainer/`: um container com GHC 9.10.3, `libpq-dev`
-e `pkg-config`, ligado a um PostgreSQL 16 que já sobe com o `db/schema.sql` aplicado. As versões
-das dependências ficam travadas em `cabal.project.freeze`, as mesmas que passaram nos testes.
-
-1. No GitHub, abra o repositório e vá em **Code → Codespaces → Create codespace on main**.
-2. Espere a criação terminar. Ela roda `cabal update && cabal build all` sozinha; da primeira vez
-   isso compila todas as dependências e leva cerca de 6 minutos numa máquina de 4 núcleos (numa
-   de 2 núcleos, o dobro).
-3. O servidor sobe sozinho toda vez que o Codespace liga (`.devcontainer/iniciar-servidor.sh`,
-   no `postStartCommand`), com o fuso `America/Sao_Paulo`. A saída fica em `/tmp/recall.log`
-   (`tail -f /tmp/recall.log`).
-4. Na aba **Ports**, abra a porta **8080** no navegador. O endereço tem o formato
-   `https://<nome-do-codespace>-8080.app.github.dev`. Por padrão a porta é privada (só abre para
-   a sua conta do GitHub); para outra pessoa acessar, clique com o botão direito nela e escolha
-   **Port Visibility → Public** (ou `gh codespace ports visibility 8080:public -c <nome>`).
-
-> [!IMPORTANT]
-> O Codespace desliga depois de 30 minutos sem uso, e o servidor cai junto. Acesso de visitantes
-> ao site não conta como uso: só terminal e editor. Para deixar pronto com antecedência, aumente
-> o limite em **GitHub → Settings → Codespaces → Default idle timeout** (até 240 minutos), ou crie
-> com `gh codespace create -R <dono>/<repo> --idle-timeout 240m`. Se ele desligar, basta abrir de
-> novo: o servidor volta sozinho e o que já foi compilado continua lá. Evite **Rebuild
-> Container**, que apaga o cache de pacotes do cabal e obriga a compilar as dependências de novo.
-
-### Testes
+O pacote `postgresql-libpq` precisa da `libpq` para compilar. No Windows, ela pode ser instalada
+pelo MSYS2 que acompanha o ghcup:
 
 ```sh
-cabal test               # unidade e propriedade do núcleo puro, sem banco
-bash scripts/smoke.sh    # HTTP de ponta a ponta, com o servidor rodando
+ghcup run --mingw-path -- pacman -S --noconfirm mingw-w64-x86_64-postgresql
 ```
 
-- [test/Spec.hs](test/Spec.hs) (hspec + QuickCheck) cobre o SM-2, a validação de baralhos,
-  cartões e contas, o JSON com acento e emoji, as estatísticas e o resumo. Duas propriedades
-  valem para qualquer sequência de notas: a facilidade nunca fica abaixo de 1,3, e a próxima
-  revisão é sempre depois de hoje.
-- [scripts/smoke.sh](scripts/smoke.sh) exercita a API real com `curl`: cadastro, login, sair e
-  token revogado, isolamento entre duas contas, CRUD, 400, 401, 404 e 409, exclusão em cascata,
-  respostas simultâneas e acento e emoji indo e voltando do banco. Cria as próprias contas e as
-  apaga no fim. `BASE` muda o endereço do servidor e `BANCO`, o banco que o script consulta.
+Antes de compilar ou rodar no Git Bash, coloque essa pasta no `PATH`:
 
-Para testar sem mexer nos seus dados, crie um banco separado e suba o servidor apontando para ele:
+```sh
+export PATH="/c/ghcup/msys64/mingw64/bin:$PATH"
+```
+
+O Windows também trava o `haskellaula.exe` enquanto ele está rodando, então é preciso parar o
+servidor (`Ctrl+C`) antes de compilar de novo.
+
+<details>
+<summary><strong>Rodando no GitHub Codespaces</strong></summary>
+
+<br>
+
+O repositório tem uma configuração de devcontainer em `.devcontainer/`, com o GHC, as
+bibliotecas de sistema e um PostgreSQL já com as tabelas criadas.
+
+1. No GitHub, abra **Code → Codespaces → Create codespace on main**.
+2. Na primeira criação, o Codespace compila todas as dependências do projeto, o que leva alguns
+   minutos.
+3. O servidor sobe sozinho sempre que o Codespace é ligado. A saída fica em `/tmp/recall.log`.
+4. Na aba **Ports**, abra a porta **8080**. Ela começa privada; para outra pessoa acessar, clique
+   com o botão direito e escolha **Port Visibility → Public**.
+
+O Codespace desliga depois de 30 minutos sem uso, e o site sai do ar junto. Visitas ao site não
+contam como uso, só o terminal e o editor. Esse limite pode ser aumentado em
+**GitHub → Settings → Codespaces → Default idle timeout**. Se ele desligar, basta abrir de novo: o
+servidor volta sozinho e a compilação não precisa ser refeita, a menos que o container seja
+reconstruído (**Rebuild Container**).
+
+</details>
+
+## Testes
+
+```sh
+cabal test
+bash scripts/smoke.sh
+```
+
+O `cabal test` roda os testes de [test/Spec.hs](test/Spec.hs), escritos com hspec e QuickCheck.
+Eles cobrem o SM-2, as validações, o JSON e as estatísticas. Como o `Nucleo` é puro, não precisam
+de banco nem do servidor rodando. Além dos exemplos fixos, há testes de propriedade que geram
+sequências aleatórias de notas e conferem que a facilidade nunca fica abaixo de 1,3 e que a
+próxima revisão é sempre depois de hoje.
+
+O `scripts/smoke.sh` testa a API de verdade com `curl` e precisa do servidor rodando. Ele passa
+por cadastro, login, logout, isolamento entre contas, criação e exclusão de baralhos e cartões e
+pelos códigos de erro. O script cria as próprias contas de teste e as apaga no final. Para não
+misturar com os seus dados, dá para rodar contra um banco separado:
 
 ```sh
 docker compose exec -T db psql -U flashcards -c "CREATE DATABASE flashcards_teste"
@@ -217,36 +250,6 @@ DATABASE_URL="host=localhost port=5432 dbname=flashcards_teste user=flashcards p
 BANCO=flashcards_teste bash scripts/smoke.sh
 ```
 
-## 8. Estrutura do repositório
+## Licença
 
-```txt
-haskellaula.cabal        executável haskellaula (RTS -threaded) + test-suite haskellaula-test
-cabal.project            projeto de um pacote só
-cabal.project.freeze     versões exatas das dependências
-docker-compose.yml       PostgreSQL 16 para desenvolvimento local
-.devcontainer/           ambiente do GitHub Codespaces (GHC 9.10.3 + PostgreSQL 16)
-db/schema.sql            tabelas usuarios, sessoes, baralhos, cartoes, revisoes e preferencias
-app/
-  Main.hs                lê DATABASE_URL, abre o pool, confere o banco e sobe o warp na 8080
-  Nucleo/                PURO: SM2, Types (baralhos e cartões), Stats, Conta, Preferencias
-  Banco/                 IO: consultas postgresql-simple (Baralhos, Contas, Preferencias)
-  Web/                   IO: HTTP com Servant
-    Api.hs               o tipo com todas as rotas
-    Comum.hs             envelope de erro, acesso ao pool, "hoje"
-    Sessao.hs            bcrypt, token, SHA-256 e cookie
-    Contas.hs            cadastro, login, sessão e sair
-    Baralhos.hs          rotas de baralhos, cartões, revisão, estatísticas e preferências
-    Server.hs            monta a aplicação e serve os arquivos estáticos
-test/Spec.hs             hspec + QuickCheck do núcleo puro
-scripts/smoke.sh         testes HTTP com curl contra o servidor rodando
-frontend/
-  index.html, app.js     página única e roteador por hash
-  styles.css             estilo das telas da conta
-  landing.css            estilo da landing
-  js/                    API, sessão, componentes, paleta de comandos e as telas (views/)
-  js/landing/            seções e animações da landing
-  vendor/                GSAP, Lenis e three.js (versões e licenças em vendor/LEIAME.md)
-```
-
-As dependências vão sempre das bordas para o núcleo: `Main → Web.Server → Web.* → Banco.* → Nucleo.*`.
-Por isso o test-suite compila só `Nucleo/`, e os testes rodam sem banco.
+BSD-3-Clause. Veja o arquivo [LICENSE](LICENSE).
