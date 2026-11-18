@@ -1,5 +1,6 @@
-/* Todos os baralhos da conta em linhas: busca, ordenação e a gaveta de criar e editar. Criar
-   um baralho leva direto à página dele com a gaveta de cartões aberta, o próximo passo natural. */
+/* Lista todos os baralhos da conta, com busca, ordenação e a gaveta para criar e editar. Depois
+   de criar um baralho, a pessoa vai direto para a página dele com a gaveta de cartões aberta,
+   porque o próximo passo é escrever os cartões. */
 import { baralhos as apiBaralhos } from '../api.js';
 import { h, icone, plural, semAcento, toast, confirmar } from '../dom.js';
 import { consumirNovoBaralho, pedirAdicionarCartao } from '../estado.js';
@@ -8,12 +9,13 @@ import { abortado, estadoErro, esqueleto, campo, mostrarErroCampo, limparErroCam
 import { linhaBaralho, capaMini, seletorCor, seletorPadrao } from './componentes.js';
 
 const ORDENS = {
-  pendentes: { rotulo: 'Pendentes primeiro', comparar: (a, b) => b.paraHoje - a.paraHoje || a.nome.localeCompare(b.nome, 'pt-BR') },
-  nome: { rotulo: 'Nome (A a Z)', comparar: (a, b) => a.nome.localeCompare(b.nome, 'pt-BR') },
-  recentes: { rotulo: 'Mais recentes', comparar: (a, b) => b.id - a.id },
+  pendentes: { rotulo: 'Pendentes primeiro', comparar: (primeiro, segundo) => segundo.paraHoje - primeiro.paraHoje || primeiro.nome.localeCompare(segundo.nome, 'pt-BR') },
+  nome: { rotulo: 'Nome (A a Z)', comparar: (primeiro, segundo) => primeiro.nome.localeCompare(segundo.nome, 'pt-BR') },
+  recentes: { rotulo: 'Mais recentes', comparar: (primeiro, segundo) => segundo.id - primeiro.id },
 };
 
-/* Gaveta de baralho: sem baralho cria, com baralho edita. aoExcluir aparece só na edição. */
+/* Gaveta de baralho. Sem baralho ela cria um novo e com baralho ela edita esse baralho.
+   aoExcluir só é usado na edição. */
 export function abrirGavetaBaralho({ baralho = null, aoSalvar, aoExcluir } = {}) {
   const nome = h('input', { class: 'input', id: 'baralho-nome', type: 'text', maxlength: '120', autocomplete: 'off', required: true });
   const descricao = h('textarea', { class: 'input', id: 'baralho-descricao', rows: '3', maxlength: '500' });
@@ -25,8 +27,8 @@ export function abrirGavetaBaralho({ baralho = null, aoSalvar, aoExcluir } = {})
     capaMini({ nome: nome.value || 'Baralho', ...capa }),
     h('span', { class: 'campo-ajuda', style: 'margin: 0' }, 'A capa aparece na lista, no painel e no topo de cada carta.'));
   nome.addEventListener('input', () => { limparErroCampo(nome); desenharPrevia(); });
-  const padrao = seletorPadrao({ valor: capa.padrao, cor: capa.cor, aoMudar: (v) => { capa.padrao = v; desenharPrevia(); } });
-  const cor = seletorCor({ valor: capa.cor, aoMudar: (v) => { capa.cor = v; padrao.mudarCor(v); desenharPrevia(); } });
+  const padrao = seletorPadrao({ valor: capa.padrao, cor: capa.cor, aoMudar: (valor) => { capa.padrao = valor; desenharPrevia(); } });
+  const cor = seletorCor({ valor: capa.cor, aoMudar: (valor) => { capa.cor = valor; padrao.mudarCor(valor); desenharPrevia(); } });
   desenharPrevia();
   const salvar = h('button', { class: 'btn btn-pri', type: 'submit' }, baralho ? 'Salvar' : 'Criar baralho');
 
@@ -62,11 +64,11 @@ export function abrirGavetaBaralho({ baralho = null, aoSalvar, aoExcluir } = {})
   });
 }
 
-export async function confirmarExclusaoBaralho(b) {
+export async function confirmarExclusaoBaralho(baralho) {
   return confirmar({
-    titulo: `Excluir “${b.nome}”?`,
-    texto: b.totalCartoes > 0
-      ? `${plural(b.totalCartoes, 'cartão', 'cartões')} e todo o histórico de revisões serão apagados. Não dá para desfazer.`
+    titulo: `Excluir “${baralho.nome}”?`,
+    texto: baralho.totalCartoes > 0
+      ? `${plural(baralho.totalCartoes, 'cartão', 'cartões')} e todo o histórico de revisões serão apagados. Não dá para desfazer.`
       : 'O baralho está vazio.',
     acao: 'Excluir baralho',
   });
@@ -77,8 +79,8 @@ export async function renderBaralhos(main, _params, { signal }) {
   const contagem = h('p', { class: 'subtitulo' });
   const busca = h('input', { class: 'input', type: 'search', placeholder: 'Buscar baralho', 'aria-label': 'Buscar baralho' });
   const ordem = h('select', { class: 'input', 'aria-label': 'Ordenar baralhos' },
-    Object.entries(ORDENS).map(([valor, o]) => h('option', { value: valor }, o.rotulo)));
-  const lista = h('ul', { class: 'lista ficha', 'aria-busy': 'true' }, esqueleto('esq-card', 3).map((e) => h('li', {}, e)));
+    Object.entries(ORDENS).map(([valor, ordenacao]) => h('option', { value: valor }, ordenacao.rotulo)));
+  const lista = h('ul', { class: 'lista ficha', 'aria-busy': 'true' }, esqueleto('esq-card', 3).map((bloco) => h('li', {}, bloco)));
   const novo = h('button', { class: 'btn btn-pri', type: 'button', onclick: () => abrirNovo() }, icone('mais'), 'Novo baralho');
 
   main.append(h('div', { class: 'pagina' },
@@ -96,7 +98,7 @@ export async function renderBaralhos(main, _params, { signal }) {
 
   function desenhar({ focarId } = {}) {
     lista.removeAttribute('aria-busy');
-    const totalCartoes = todos.reduce((s, b) => s + b.totalCartoes, 0);
+    const totalCartoes = todos.reduce((soma, baralho) => soma + baralho.totalCartoes, 0);
     contagem.textContent = todos.length
       ? `${plural(todos.length, 'baralho', 'baralhos')} e ${plural(totalCartoes, 'cartão', 'cartões')}`
       : 'Comece criando um baralho para um assunto que você quer guardar.';
@@ -112,7 +114,7 @@ export async function renderBaralhos(main, _params, { signal }) {
 
     const termo = semAcento(busca.value.trim());
     const visiveis = todos
-      .filter((b) => !termo || semAcento(`${b.nome} ${b.descricao}`).includes(termo))
+      .filter((baralho) => !termo || semAcento(`${baralho.nome} ${baralho.descricao}`).includes(termo))
       .sort(ORDENS[ordem.value].comparar);
     if (visiveis.length === 0) {
       lista.replaceChildren(h('li', { class: 'estado vazio' },
@@ -121,7 +123,7 @@ export async function renderBaralhos(main, _params, { signal }) {
           h('button', { class: 'btn btn-sec', type: 'button', onclick: () => { busca.value = ''; desenhar(); busca.focus(); } }, 'Limpar busca'))));
       return;
     }
-    lista.replaceChildren(...visiveis.map((b) => linhaBaralho(b, { aoEditar: editar, aoExcluir: excluir })));
+    lista.replaceChildren(...visiveis.map((baralho) => linhaBaralho(baralho, { aoEditar: editar, aoExcluir: excluir })));
     if (focarId) {
       const linha = lista.querySelector(`[data-id="${focarId}"]`);
       linha?.classList.add('recem-criado');
@@ -147,19 +149,19 @@ export async function renderBaralhos(main, _params, { signal }) {
     });
   }
 
-  function editar(b) {
+  function editar(baralho) {
     abrirGavetaBaralho({
-      baralho: b,
+      baralho,
       aoSalvar: (salvo) => carregar({ focarId: salvo.id }),
       aoExcluir: (alvo) => { fecharGaveta(); excluir(alvo); },
     });
   }
 
-  async function excluir(b) {
-    if (!(await confirmarExclusaoBaralho(b))) return;
+  async function excluir(baralho) {
+    if (!(await confirmarExclusaoBaralho(baralho))) return;
     try {
-      await apiBaralhos.excluir(b.id);
-      toast(`“${b.nome}” foi excluído.`, { tipo: 'ok' });
+      await apiBaralhos.excluir(baralho.id);
+      toast(`“${baralho.nome}” foi excluído.`, { tipo: 'ok' });
       await carregar();
     } catch (erro) {
       toast(erro.message);

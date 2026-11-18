@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Núcleo puro das contas: o usuário que a API devolve, os corpos de cadastro e login e a
-validação deles. Não faz IO; o hash da senha e a sessão ficam em Banco.Contas e Web.Sessao.
+{- | As regras das contas: o usuário que a API devolve, os corpos de cadastro e de login e a
+validação deles. Este módulo não faz IO. O hash da senha e a sessão ficam em Banco.Contas e
+Web.Sessao.
 -}
 module Nucleo.Conta
     ( Usuario (..)
@@ -33,8 +34,8 @@ data NovaConta = NovaConta
     } deriving (Eq, Show)
 
 data Credenciais = Credenciais
-    { credEmail :: Text
-    , credSenha :: Text
+    { credenciaisEmail :: Text
+    , credenciaisSenha :: Text
     } deriving (Eq, Show)
 
 erroNomeConta, erroNomeLongo, erroEmail, erroSenhaCurta, erroSenhaLonga, erroCredenciais :: Text
@@ -46,79 +47,80 @@ erroSenhaLonga  = "a senha é longa demais"
 erroCredenciais = "informe e-mail e senha"
 
 instance ToJSON Usuario where
-    toJSON u = object
-        [ "id"    .= usuarioId u
-        , "nome"  .= usuarioNome u
-        , "email" .= usuarioEmail u
+    toJSON usuario = object
+        [ "id"    .= usuarioId usuario
+        , "nome"  .= usuarioNome usuario
+        , "email" .= usuarioEmail usuario
         ]
 
 instance FromJSON NovaConta where
-    parseJSON = corpo $ \o -> NovaConta
-        <$> texto "nome" erroNomeConta o
-        <*> texto "email" erroEmail o
-        <*> texto "senha" erroSenhaCurta o
+    parseJSON = corpo $ \objeto -> NovaConta
+        <$> texto "nome" erroNomeConta objeto
+        <*> texto "email" erroEmail objeto
+        <*> texto "senha" erroSenhaCurta objeto
 
 instance FromJSON Credenciais where
-    parseJSON = corpo $ \o -> Credenciais
-        <$> texto "email" erroCredenciais o
-        <*> texto "senha" erroCredenciais o
+    parseJSON = corpo $ \objeto -> Credenciais
+        <$> texto "email" erroCredenciais objeto
+        <*> texto "senha" erroCredenciais objeto
 
--- O e-mail é a chave da conta: a mesma pessoa digitando com outra caixa acha a mesma conta.
+-- O e-mail identifica a conta, então "Ana@X.com" e "ana@x.com" precisam levar à mesma conta.
 normalizarEmail :: Text -> Text
 normalizarEmail = T.toLower . T.strip
 
-{- | Recusa o que certamente não é endereço (sem arroba, duas arrobas, espaço, domínio sem
-ponto). A confirmação de que o endereço existe não faz parte do cadastro.
+{- | Recusa só o que com certeza não é um endereço de e-mail (sem arroba, com duas arrobas, com
+espaço ou com domínio sem ponto). O cadastro não confere se o endereço existe de verdade.
 -}
 emailValido :: Text -> Bool
-emailValido e = case T.splitOn "@" e of
+emailValido email = case T.splitOn "@" email of
     [usuario, dominio] ->
         not (T.null usuario)
-            && T.length e <= 254
-            && not (T.any (== ' ') e)
+            && T.length email <= 254
+            && not (T.any (== ' ') email)
             && T.isInfixOf "." dominio
             && not (T.isPrefixOf "." dominio)
             && not (T.isSuffixOf "." dominio)
     _ -> False
 
-{- | A senha não passa por strip: espaço nas pontas faz parte do que a pessoa digitou. O
-teto é em bytes UTF-8 porque o bcrypt só usa os primeiros 72 bytes. Letra acentuada conta
-como letra; símbolo é o que não é letra, número nem espaço.
+{- | A senha não passa por strip, porque os espaços nas pontas fazem parte do que a pessoa
+digitou. O limite máximo é contado em bytes UTF-8, já que o bcrypt só usa os primeiros 72 bytes.
+Letra acentuada conta como letra, e símbolo é qualquer caractere que não seja letra, número ou
+espaço.
 -}
 validarSenha :: Text -> Either Text Text
-validarSenha s
-    | T.length s < 8                     = Left erroSenhaCurta
-    | BS.length (TE.encodeUtf8 s) > 72   = Left erroSenhaLonga
-    | not (T.any isUpper s)              = Left "a senha precisa de uma letra maiúscula"
-    | not (T.any isLower s)              = Left "a senha precisa de uma letra minúscula"
-    | not (T.any isDigit s)              = Left "a senha precisa de um número"
-    | not (T.any simbolo s)              = Left "a senha precisa de um símbolo"
-    | otherwise                          = Right s
+validarSenha senha
+    | T.length senha < 8                     = Left erroSenhaCurta
+    | BS.length (TE.encodeUtf8 senha) > 72   = Left erroSenhaLonga
+    | not (T.any isUpper senha)              = Left "a senha precisa de uma letra maiúscula"
+    | not (T.any isLower senha)              = Left "a senha precisa de uma letra minúscula"
+    | not (T.any isDigit senha)              = Left "a senha precisa de um número"
+    | not (T.any simbolo senha)              = Left "a senha precisa de um símbolo"
+    | otherwise                              = Right senha
   where
-    simbolo c = not (isAlphaNum c) && not (isSpace c)
+    simbolo caractere = not (isAlphaNum caractere) && not (isSpace caractere)
 
 validarNome :: Text -> Either Text Text
-validarNome n
+validarNome nomeDigitado
     | T.null limpo        = Left erroNomeConta
     | T.length limpo > 80 = Left erroNomeLongo
     | otherwise           = Right limpo
   where
-    limpo = T.strip n
+    limpo = T.strip nomeDigitado
 
 validarEmail :: Text -> Either Text Text
-validarEmail e
+validarEmail emailDigitado
     | emailValido limpo = Right limpo
     | otherwise         = Left erroEmail
   where
-    limpo = normalizarEmail e
+    limpo = normalizarEmail emailDigitado
 
 validarNovaConta :: NovaConta -> Either Text NovaConta
-validarNovaConta (NovaConta n e s) = NovaConta <$> validarNome n <*> validarEmail e <*> validarSenha s
+validarNovaConta (NovaConta nome email senha) = NovaConta <$> validarNome nome <*> validarEmail email <*> validarSenha senha
 
--- O login não repete as regras do cadastro: senha fora delas só não confere.
+-- O login não aplica as regras de senha do cadastro. Uma senha fora delas simplesmente não confere.
 validarCredenciais :: Credenciais -> Either Text Credenciais
-validarCredenciais (Credenciais e s)
-    | T.null email || T.null s = Left erroCredenciais
-    | otherwise                = Right (Credenciais email s)
+validarCredenciais (Credenciais emailDigitado senha)
+    | T.null email || T.null senha = Left erroCredenciais
+    | otherwise                    = Right (Credenciais email senha)
   where
-    email = normalizarEmail e
+    email = normalizarEmail emailDigitado

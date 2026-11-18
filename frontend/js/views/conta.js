@@ -1,20 +1,21 @@
-/* Telas de Entrar e Criar conta. Visita rápida: uma ficha, o formulário e o caminho para a outra
-   tela. No cadastro, a regra da senha aparece como lista que se marca ao digitar e a confirmação
-   diz na hora se confere; o servidor repete a regra. O erro mostrado é o "erro" da API. */
+/* Telas de Entrar e Criar conta. Cada uma é uma ficha com o formulário e o link para a outra
+   tela. No cadastro, a regra da senha aparece como uma lista que vai sendo marcada enquanto a
+   pessoa digita, e a confirmação avisa na hora se as senhas conferem. O servidor confere a regra
+   de novo. O erro mostrado é o campo "erro" que vem da API. */
 import { conta as apiConta } from '../api.js';
 import { h, icone, logoMarca } from '../dom.js';
 import { consumirDestino } from '../estado.js';
 import { definirUsuario } from '../sessao.js';
 import { campo, mostrarErroCampo, limparErroCampo } from './comum.js';
 
-/* Espelha validarSenha de Nucleo.Conta: letra acentuada é letra; símbolo não é letra, número
-   nem espaço. O teto de 72 bytes fica com o servidor. */
+/* Mesma regra do validarSenha de Nucleo.Conta. Letra acentuada conta como letra, e símbolo é o
+   que não é letra, número nem espaço. O limite de 72 bytes é checado só no servidor. */
 const REGRAS = [
-  { rotulo: '8 ou mais caracteres', cumpre: (s) => [...s].length >= 8 },
-  { rotulo: 'uma letra maiúscula', cumpre: (s) => /\p{Lu}/u.test(s) },
-  { rotulo: 'uma letra minúscula', cumpre: (s) => /\p{Ll}/u.test(s) },
-  { rotulo: 'um número', cumpre: (s) => /[0-9]/.test(s) },
-  { rotulo: 'um símbolo (! @ # ...)', cumpre: (s) => /[^\p{L}\p{N}\s]/u.test(s) },
+  { rotulo: '8 ou mais caracteres', cumpre: (senha) => [...senha].length >= 8 },
+  { rotulo: 'uma letra maiúscula', cumpre: (senha) => /\p{Lu}/u.test(senha) },
+  { rotulo: 'uma letra minúscula', cumpre: (senha) => /\p{Ll}/u.test(senha) },
+  { rotulo: 'um número', cumpre: (senha) => /[0-9]/.test(senha) },
+  { rotulo: 'um símbolo (! @ # ...)', cumpre: (senha) => /[^\p{L}\p{N}\s]/u.test(senha) },
 ];
 
 function marca() {
@@ -47,15 +48,15 @@ function campoTexto(id, tipo, autocomplete, extra = {}) {
   return input;
 }
 
-/* validarLocal devolve [controle, mensagem] do primeiro problema ou null; enviar chama a API. */
-function telaDeConta(main, { titulo, sub, campos, botao, validarLocal, enviar, troca }) {
+/* validarLocal devolve [controle, mensagem] do primeiro problema, ou null. enviar chama a API. */
+function telaDeConta(main, { titulo, subtitulo, campos, botao, validarLocal, enviar, troca }) {
   const erroGeral = h('p', { class: 'auth-erro', role: 'alert', hidden: true });
   const submeter = h('button', { class: 'btn btn-pri btn-alto btn-largo', type: 'submit' }, botao);
   const form = h('form', { class: 'auth-form', novalidate: true }, campos, erroGeral, submeter);
 
   form.addEventListener('input', () => { erroGeral.hidden = true; });
-  form.addEventListener('submit', async (e) => {
-    e.preventDefault();
+  form.addEventListener('submit', async (evento) => {
+    evento.preventDefault();
     erroGeral.hidden = true;
     const problema = validarLocal();
     if (problema) {
@@ -80,7 +81,7 @@ function telaDeConta(main, { titulo, sub, campos, botao, validarLocal, enviar, t
       h('div', { class: 'auth-cartao ficha' },
         marca(),
         h('h1', { class: 'auth-titulo', tabindex: '-1' }, titulo),
-        h('p', { class: 'auth-sub' }, sub),
+        h('p', { class: 'auth-sub' }, subtitulo),
         form),
       h('p', { class: 'auth-troca' }, troca.texto, ' ', h('a', { href: troca.href }, troca.link)))));
   return form;
@@ -93,7 +94,7 @@ export async function renderEntrar(main) {
 
   const form = telaDeConta(main, {
     titulo: 'Bom te ver de novo',
-    sub: 'Entre para continuar de onde parou.',
+    subtitulo: 'Entre para continuar de onde parou.',
     campos: [
       campo({ rotulo: 'E-mail', id: email.id, controle: email }),
       campo({ rotulo: 'Senha', id: senha.input.id, controle: senha.controle }),
@@ -118,22 +119,22 @@ export async function renderCriarConta(main) {
   const senha = campoSenha('conta-senha', 'new-password');
   const confirmacao = campoSenha('conta-confirmar', 'new-password');
 
-  const itens = REGRAS.map((r) => h('li', { class: 'regra' },
+  const itens = REGRAS.map((regra) => h('li', { class: 'regra' },
     h('span', { class: 'regra-marca', 'aria-hidden': 'true' }, icone('check')),
-    h('span', {}, r.rotulo)));
+    h('span', {}, regra.rotulo)));
   const regras = h('ul', { class: 'regras', id: 'conta-senha-regras', 'aria-label': 'A senha precisa de' }, itens);
   const confere = h('p', { class: 'confere', id: 'conta-confirmar-confere', 'aria-live': 'polite', hidden: true });
   senha.input.setAttribute('aria-describedby', regras.id);
 
   function atualizarRegras() {
-    REGRAS.forEach((r, i) => {
-      const ok = r.cumpre(senha.input.value);
+    REGRAS.forEach((regra, i) => {
+      const ok = regra.cumpre(senha.input.value);
       itens[i].classList.toggle('ok', ok);
-      itens[i].setAttribute('aria-label', `${r.rotulo}: ${ok ? 'cumprido' : 'falta'}`);
+      itens[i].setAttribute('aria-label', `${regra.rotulo}: ${ok ? 'cumprido' : 'falta'}`);
     });
   }
-  /* Só acusa diferença depois que a confirmação alcança o tamanho da senha: no meio da digitação
-     ela é sempre diferente, e o aviso vermelho cedo demais parece erro. */
+  /* Só avisa que as senhas são diferentes depois que a confirmação chega no tamanho da senha.
+     No meio da digitação elas sempre são diferentes, e o aviso vermelho cedo demais parece erro. */
   function atualizarConfere() {
     const igual = confirmacao.input.value === senha.input.value;
     if (!confirmacao.input.value || (!igual && confirmacao.input.value.length < senha.input.value.length)) {
@@ -149,7 +150,7 @@ export async function renderCriarConta(main) {
 
   const form = telaDeConta(main, {
     titulo: 'Crie sua conta',
-    sub: 'Seus baralhos, cartões e revisões ficam guardados nela.',
+    subtitulo: 'Seus baralhos, cartões e revisões ficam guardados nela.',
     campos: [
       campo({ rotulo: 'Nome', id: nome.id, controle: nome }),
       campo({ rotulo: 'E-mail', id: email.id, controle: email }),
@@ -168,7 +169,7 @@ export async function renderCriarConta(main) {
     validarLocal: () => {
       if (!nome.value.trim()) return [nome, 'Informe seu nome'];
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.value.trim())) return [email, 'Confira o e-mail'];
-      const falta = REGRAS.find((r) => !r.cumpre(senha.input.value));
+      const falta = REGRAS.find((regra) => !regra.cumpre(senha.input.value));
       if (falta) return [senha.input, `A senha precisa de ${falta.rotulo.replace(' (! @ # ...)', '')}`];
       if (confirmacao.input.value !== senha.input.value) return [confirmacao.input, 'As senhas não conferem'];
       return null;

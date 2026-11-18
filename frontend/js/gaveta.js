@@ -20,8 +20,8 @@ function aoFechar() {
   if (typeof callback === 'function') callback();
 }
 
-/* corpo e rodape são nós; o form envolve os dois para que Enter e o botão de envio funcionem
-   igual. aoEnviar recebe o evento já com preventDefault. */
+/* corpo e rodape são nós do DOM. O form envolve os dois para que Enter e o botão de envio
+   funcionem do mesmo jeito. aoEnviar recebe o evento já com preventDefault. */
 export function abrirGaveta({ titulo, corpo, rodape, aoEnviar, aoFechar: callback }) {
   const el = dialogo();
   if (el.open) el.close();
@@ -31,9 +31,9 @@ export function abrirGaveta({ titulo, corpo, rodape, aoEnviar, aoFechar: callbac
   const form = h('form', { class: 'gaveta-form', novalidate: true },
     h('div', { class: 'gaveta-corpo' }, corpo),
     rodape ? h('footer', { class: 'gaveta-rodape' }, rodape) : null);
-  form.addEventListener('submit', (e) => {
-    e.preventDefault();
-    if (aoEnviar) aoEnviar(e);
+  form.addEventListener('submit', (evento) => {
+    evento.preventDefault();
+    if (aoEnviar) aoEnviar(evento);
   });
   el.querySelector('.gaveta-conteudo').replaceChildren(form);
   el.showModal();
@@ -46,7 +46,7 @@ export function iniciarGaveta() {
   const el = dialogo();
   el.addEventListener('close', aoFechar);
   el.querySelector('[data-acao="fechar-gaveta"]').addEventListener('click', fecharGaveta);
-  el.addEventListener('click', (e) => {
-    if (e.target === el) fecharGaveta();
+  el.addEventListener('click', (evento) => {
+    if (evento.target === el) fecharGaveta();
   });
 }

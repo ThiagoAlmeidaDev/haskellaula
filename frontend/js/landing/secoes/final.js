@@ -6,8 +6,8 @@ import { FINAL } from '../conteudo.js';
 import { CURVAS, magnetico, revelarTexto, revelarTitulo } from '../movimento.js';
 
 export function final() {
-  const raios = CORES.map((c, i) => h('span', { class: 'final-raio', style: `--i: ${i}` },
-    h('span', { class: 'final-carta capa', dataset: { cor: c.valor, padrao: PADROES[i % PADROES.length].valor } })));
+  const raios = CORES.map((cor, i) => h('span', { class: 'final-raio', style: `--i: ${i}` },
+    h('span', { class: 'final-carta capa', dataset: { cor: cor.valor, padrao: PADROES[i % PADROES.length].valor } })));
   const giro = h('div', { class: 'final-giro' }, raios);
   const roda = h('div', { class: 'final-roda', 'aria-hidden': 'true' }, giro);
   const titulo = h('h2', { class: 'lp-h2 final-titulo', id: 'lp-final' }, FINAL.titulo);
@@ -23,7 +23,7 @@ export function final() {
     magnetico(motor, acao, { forca: 0.4 });
     if (!motor.animado) return;
     const { gsap } = motor;
-    const cartas = raios.map((r) => r.firstElementChild);
+    const cartas = raios.map((raio) => raio.firstElementChild);
 
     motor.no(() => {
       gsap.timeline({ scrollTrigger: { trigger: el, start: 'top 65%', once: true } })

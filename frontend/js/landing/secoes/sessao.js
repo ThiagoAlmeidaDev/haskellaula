@@ -1,13 +1,13 @@
 /* Sessão: a mesma carta de estudo do app, presa na tela enquanto a rolagem conta a sessão em três
    passos. A pergunta se escreve, a carta vira, "Bom" afunda e a carta voa para o trilho de dias.
-   O passo ativo vai em data-passo; o CSS decide como os outros aparecem em cada largura. */
+   O passo ativo fica em data-passo, e o CSS decide como os outros aparecem em cada largura. */
 import { h, kbd } from '../../dom.js';
 import { PREFERENCIAS_PADRAO } from '../../sessao.js';
 import { cartaEstudo } from '../../views/componentes.js';
 import { SESSAO } from '../conteudo.js';
 import { CURVAS, revelarTitulo } from '../movimento.js';
 
-/* Escala em que a carta pousa no trilho: a largura de .trilho-fantasma sobre a da carta. */
+/* Escala em que a carta pousa no trilho, que é a largura de .trilho-fantasma dividida pela da carta. */
 const ESCALA_NO_TRILHO = 0.1;
 
 export function sessao() {
@@ -17,16 +17,16 @@ export function sessao() {
     cor: dados.cor, padrao: dados.padrao, prefs: PREFERENCIAS_PADRAO,
   });
   const titulo = h('h2', { class: 'lp-h2', id: 'lp-sessao' }, SESSAO.titulo);
-  const passos = SESSAO.passos.map((p, i) => h('li', { class: 'sessao-passo', dataset: { passo: String(i) } },
+  const passos = SESSAO.passos.map((passo, i) => h('li', { class: 'sessao-passo', dataset: { passo: String(i) } },
     h('span', { class: 'sessao-num', 'aria-hidden': 'true' }, String(i + 1)),
-    h('div', {}, h('h3', { class: 'sessao-passo-titulo' }, p.titulo), h('p', { class: 'sessao-passo-texto' }, p.texto))));
+    h('div', {}, h('h3', { class: 'sessao-passo-titulo' }, passo.titulo), h('p', { class: 'sessao-passo-texto' }, passo.texto))));
   const barra = h('span', { class: 'sessao-barra-cheia' });
-  const respostas = SESSAO.respostas.map((r) => h('span', { class: `resposta ${r.classe}` }, h('span', { class: 'resposta-rotulo' }, r.rotulo), kbd(r.tecla)));
-  const dias = SESSAO.trilho.map((d) => h('span', { class: 'trilho-dia', dataset: { dia: String(d.dia) } }, h('span', { class: 'trilho-ponto' }), h('span', { class: 'trilho-rotulo' }, d.rotulo)));
-  const fantasmas = dias.slice(2).map((d) => {
-    const f = h('span', { class: 'trilho-fantasma', dataset: { cor: dados.cor } });
-    d.append(f);
-    return f;
+  const respostas = SESSAO.respostas.map((resposta) => h('span', { class: `resposta ${resposta.classe}` }, h('span', { class: 'resposta-rotulo' }, resposta.rotulo), kbd(resposta.tecla)));
+  const dias = SESSAO.trilho.map((diaDoTrilho) => h('span', { class: 'trilho-dia', dataset: { dia: String(diaDoTrilho.dia) } }, h('span', { class: 'trilho-ponto' }), h('span', { class: 'trilho-rotulo' }, diaDoTrilho.rotulo)));
+  const fantasmas = dias.slice(2).map((dia) => {
+    const fantasma = h('span', { class: 'trilho-fantasma', dataset: { cor: dados.cor } });
+    dia.append(fantasma);
+    return fantasma;
   });
   const trilho = h('div', { class: 'sessao-trilho' }, h('span', { class: 'trilho-linha' }), dias);
 
@@ -61,13 +61,13 @@ export function sessao() {
         return { x: para.x - de.x, y: para.y - ponto.offsetHeight / 2 - 6 - (carta.el.offsetHeight * ESCALA_NO_TRILHO) / 2 - de.y };
       };
 
-      /* Onde cada passo começa no progresso da rolagem: escrever é rápido, virar e voltar ganham mais tempo. */
+      /* Onde cada passo começa no progresso da rolagem. Escrever é rápido, virar e voltar levam mais tempo. */
       const INICIO_DOS_PASSOS = [0, 0.22, 0.6];
-      const tl = gsap.timeline({
+      const linhaDoTempo = gsap.timeline({
         defaults: { ease: 'none' },
         scrollTrigger: {
           trigger: el, start: 'top top', end: '+=200%', pin: palco, scrub: 0.5, invalidateOnRefresh: true,
-          onUpdate: (self) => { el.dataset.passo = String(INICIO_DOS_PASSOS.findLastIndex((p) => self.progress >= p)); },
+          onUpdate: (self) => { el.dataset.passo = String(INICIO_DOS_PASSOS.findLastIndex((inicio) => self.progress >= inicio)); },
         },
       });
 
@@ -75,7 +75,7 @@ export function sessao() {
         yPercent: 12, rotate: 4, autoAlpha: 0, duration: 1, ease: CURVAS.saida,
         scrollTrigger: { trigger: el, start: 'top 85%', once: true },
       });
-      tl.fromTo(barra, { scaleY: 0 }, { scaleY: 1, duration: 1, transformOrigin: '50% 0%' }, 0)
+      linhaDoTempo.fromTo(barra, { scaleY: 0 }, { scaleY: 1, duration: 1, transformOrigin: '50% 0%' }, 0)
         .from(letras, { autoAlpha: 0, duration: 0.01, stagger: 0.007 }, 0.03)
         .to(carta.carta, { rotationY: 180, duration: 0.1, ease: 'power2.inOut' }, 0.25)
         .from(respostas, { y: 24, autoAlpha: 0, duration: 0.05, stagger: 0.015, ease: CURVAS.saida }, 0.36)

@@ -26,8 +26,8 @@ export const ESQUECIMENTO = {
   fecho: '4 revisões em 60 dias',
 };
 
-/* Dias de revisão de um cartão segundo o SM-2: sempre "Bom" dá 1, 7, 22 e 60; errar no dia 7
-   derruba a facilidade para 1,96 e o cartão volta nos dias 8, 9, 15, 27 e 51. */
+/* Dias de revisão de um cartão segundo o SM-2. Respondendo sempre "Bom", ele volta nos dias 1, 7, 22
+   e 60. Se errar no dia 7, a facilidade cai para 1,96 e o cartão volta nos dias 8, 9, 15, 27 e 51. */
 export const REVISOES_BOM = [1, 7, 22, 60];
 
 export const CENARIOS = {
@@ -64,7 +64,7 @@ export const CALENDARIO = {
   exemplos: 'Seis cartas, criadas em dias diferentes, acertadas sempre. Toque num dia para ver quais voltam.',
 };
 
-/* Cartas de exemplo do calendário. inicio é há quantos dias a carta foi criada: ela volta nos dias
+/* Cartas de exemplo do calendário. inicio é há quantos dias a carta foi criada. Ela volta nos dias
    de REVISOES_BOM contados da criação, e só os que caem entre amanhã e o dia 69 aparecem. */
 export const EXEMPLOS_CALENDARIO = [
   { baralho: 'Japonês', cor: 'chiclete', pergunta: 'Como se diz “gato”?', inicio: 0 },

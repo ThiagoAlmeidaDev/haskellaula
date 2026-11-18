@@ -1,8 +1,12 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Núcleo puro dos registros da API (baralho, cartão, resposta): o JSON de entrada e saída, a
-validação que roda antes de qualquer IO, a etapa de cada cartão e os prazos de cada nota na
-revisão. A mensagem de erro do corpo sai daqui.
+{- | Os registros da API (baralho, cartão e resposta), com o JSON de entrada e saída e a validação
+que roda antes de qualquer IO. Também calcula a etapa de cada cartão e o prazo que cada nota daria
+na revisão. As mensagens de erro de corpo inválido são definidas aqui.
+
+Os campos dos registros têm o nome do tipo como prefixo (cartaoFacilidade, novoBaralhoNome...)
+porque em Haskell cada campo vira uma função do módulo, e dois tipos não podem ter um campo com
+o mesmo nome.
 -}
 module Nucleo.Types
     ( Baralho (..)
@@ -72,7 +76,7 @@ visualPadrao :: Visual
 visualPadrao = Visual Cobalto Liso
 
 corTexto :: Cor -> Text
-corTexto c = case c of
+corTexto corDaCapa = case corDaCapa of
     Cobalto  -> "cobalto"
     Tomate   -> "tomate"
     Sol      -> "sol"
@@ -83,17 +87,17 @@ corTexto c = case c of
     Grafite  -> "grafite"
 
 padraoTexto :: Padrao -> Text
-padraoTexto p = case p of
+padraoTexto estampa = case estampa of
     Liso     -> "liso"
     Bolinhas -> "bolinhas"
     Listras  -> "listras"
     Xadrez   -> "xadrez"
 
 lerCor :: Text -> Maybe Cor
-lerCor t = lookup t [(corTexto c, c) | c <- [minBound .. maxBound]]
+lerCor textoCor = lookup textoCor [(corTexto opcao, opcao) | opcao <- [minBound .. maxBound]]
 
 lerPadrao :: Text -> Maybe Padrao
-lerPadrao t = lookup t [(padraoTexto p, p) | p <- [minBound .. maxBound]]
+lerPadrao textoPadrao = lookup textoPadrao [(padraoTexto opcao, opcao) | opcao <- [minBound .. maxBound]]
 
 data Etapa = Novo | Aprendendo | Dominado deriving (Eq, Show)
 
@@ -106,47 +110,49 @@ data Etapas = Etapas
 semEtapas :: Etapas
 semEtapas = Etapas 0 0 0
 
-{- | Recebe repetições e intervalo. Novo: nunca respondido. Dominado: intervalo de 21 dias ou
-mais, o limite de cartão maduro do Anki. O resto, inclusive o cartão recém-errado, aprende.
+{- | Recebe as repetições e o intervalo do cartão. Novo é o cartão que nunca foi respondido, e
+dominado é o que tem intervalo de 21 dias ou mais (o mesmo limite que o Anki usa para cartão
+maduro). Todo o resto, inclusive um cartão que acabou de ser errado, está aprendendo.
 -}
 etapaDe :: Int -> Int -> Etapa
-etapaDe reps int
-    | reps == 0 && int == 0 = Novo
-    | int >= 21             = Dominado
-    | otherwise             = Aprendendo
+etapaDe numeroRepeticoes diasIntervalo
+    | numeroRepeticoes == 0 && diasIntervalo == 0 = Novo
+    | diasIntervalo >= 21                         = Dominado
+    | otherwise                                   = Aprendendo
 
--- | Conta as etapas de pares (repetições, intervalo).
+-- | Conta as etapas a partir de pares (repetições, intervalo).
 contarEtapas :: [(Int, Int)] -> Etapas
 contarEtapas = foldr somar semEtapas
   where
-    somar (r, i) (Etapas n a d) = case etapaDe r i of
-        Novo       -> Etapas (n + 1) a d
-        Aprendendo -> Etapas n (a + 1) d
-        Dominado   -> Etapas n a (d + 1)
+    somar (numeroRepeticoes, diasIntervalo) (Etapas qtdNovos qtdAprendendo qtdDominados) =
+        case etapaDe numeroRepeticoes diasIntervalo of
+            Novo       -> Etapas (qtdNovos + 1) qtdAprendendo qtdDominados
+            Aprendendo -> Etapas qtdNovos (qtdAprendendo + 1) qtdDominados
+            Dominado   -> Etapas qtdNovos qtdAprendendo (qtdDominados + 1)
 
 data NovoBaralho = NovoBaralho
-    { nbNome      :: Text
-    , nbDescricao :: Text
-    , nbVisual    :: Visual
+    { novoBaralhoNome      :: Text
+    , novoBaralhoDescricao :: Text
+    , novoBaralhoVisual    :: Visual
     } deriving (Eq, Show)
 
 data Cartao = Cartao
-    { cartaoId        :: Int
-    , cBaralhoId      :: Int
-    , frente          :: Text
-    , verso           :: Text
-    , cFacilidade     :: Double
-    , cIntervalo      :: Int
-    , cRepeticoes     :: Int
-    , cProximaRevisao :: Day
+    { cartaoId             :: Int
+    , cartaoBaralhoId      :: Int
+    , frente               :: Text
+    , verso                :: Text
+    , cartaoFacilidade     :: Double
+    , cartaoIntervalo      :: Int
+    , cartaoRepeticoes     :: Int
+    , cartaoProximaRevisao :: Day
     } deriving (Eq, Show)
 
 data NovoCartao = NovoCartao
-    { ncFrente :: Text
-    , ncVerso  :: Text
+    { novoCartaoFrente :: Text
+    , novoCartaoVerso  :: Text
     } deriving (Eq, Show)
 
-newtype Resposta = Resposta { rNota :: Int } deriving (Eq, Show)
+newtype Resposta = Resposta { respostaNota :: Int } deriving (Eq, Show)
 
 erroNome, erroFrente, erroVerso, erroNota :: Text
 erroNome   = "nome é obrigatório"
@@ -155,22 +161,22 @@ erroVerso  = "verso é obrigatório"
 erroNota   = "nota deve estar entre 0 e 5"
 
 instance ToJSON Baralho where
-    toJSON b = object
-        [ "id"           .= baralhoId b
-        , "nome"         .= nome b
-        , "descricao"    .= descricao b
-        , "totalCartoes" .= totalCartoes b
-        , "paraHoje"     .= paraHoje b
-        , "etapas"       .= etapas b
-        , "cor"          .= corTexto (cor (visual b))
-        , "padrao"       .= padraoTexto (padrao (visual b))
+    toJSON baralho = object
+        [ "id"           .= baralhoId baralho
+        , "nome"         .= nome baralho
+        , "descricao"    .= descricao baralho
+        , "totalCartoes" .= totalCartoes baralho
+        , "paraHoje"     .= paraHoje baralho
+        , "etapas"       .= etapas baralho
+        , "cor"          .= corTexto (cor (visual baralho))
+        , "padrao"       .= padraoTexto (padrao (visual baralho))
         ]
 
 instance ToJSON Etapas where
-    toJSON e = object
-        [ "novos"      .= novos e
-        , "aprendendo" .= aprendendo e
-        , "dominados"  .= dominados e
+    toJSON contagem = object
+        [ "novos"      .= novos contagem
+        , "aprendendo" .= aprendendo contagem
+        , "dominados"  .= dominados contagem
         ]
 
 instance ToJSON Etapa where
@@ -179,121 +185,123 @@ instance ToJSON Etapa where
     toJSON Dominado   = String "dominado"
 
 instance ToJSON Cartao where
-    toJSON c = object
-        [ "id"             .= cartaoId c
-        , "baralhoId"      .= cBaralhoId c
-        , "frente"         .= frente c
-        , "verso"          .= verso c
-        , "facilidade"     .= cFacilidade c
-        , "intervalo"      .= cIntervalo c
-        , "repeticoes"     .= cRepeticoes c
-        , "proximaRevisao" .= cProximaRevisao c
-        , "etapa"          .= etapaDe (cRepeticoes c) (cIntervalo c)
+    toJSON cartao = object
+        [ "id"             .= cartaoId cartao
+        , "baralhoId"      .= cartaoBaralhoId cartao
+        , "frente"         .= frente cartao
+        , "verso"          .= verso cartao
+        , "facilidade"     .= cartaoFacilidade cartao
+        , "intervalo"      .= cartaoIntervalo cartao
+        , "repeticoes"     .= cartaoRepeticoes cartao
+        , "proximaRevisao" .= cartaoProximaRevisao cartao
+        , "etapa"          .= etapaDe (cartaoRepeticoes cartao) (cartaoIntervalo cartao)
         ]
 
--- | O prazo em dias que uma nota daria ao cartão se fosse a resposta de hoje.
+-- | Em quantos dias o cartão voltaria se a resposta de hoje fosse esta nota.
 data Previsao = Previsao Int Integer deriving (Eq, Show)
 
--- | Um cartão devido, com o prazo de cada nota para a tela de estudo mostrar antes da resposta.
+-- | Um cartão que vence hoje, junto com a previsão de cada nota, que a tela de estudo mostra nos botões.
 data ParaRevisar = ParaRevisar Cartao [Previsao] deriving (Eq, Show)
 
 instance ToJSON Previsao where
-    toJSON (Previsao n d) = object ["nota" .= n, "dias" .= d]
+    toJSON (Previsao valorNota dias) = object ["nota" .= valorNota, "dias" .= dias]
 
--- O cartão sai com as mesmas chaves de sempre, mais a lista de previsões.
+-- O cartão sai com as mesmas chaves de sempre e mais a lista de previsões.
 instance ToJSON ParaRevisar where
-    toJSON (ParaRevisar c ps) = case toJSON c of
-        Object o -> Object (KM.insert "previsoes" (toJSON ps) o)
-        outro    -> outro
+    toJSON (ParaRevisar cartao previsoes) = case toJSON cartao of
+        Object chaves -> Object (KM.insert "previsoes" (toJSON previsoes) chaves)
+        outro         -> outro
 
 estadoDoCartao :: Cartao -> EstadoCartao
-estadoDoCartao c = EstadoCartao (cFacilidade c) (fromIntegral (cIntervalo c)) (cRepeticoes c) (cProximaRevisao c)
+estadoDoCartao cartao =
+    EstadoCartao (cartaoFacilidade cartao) (fromIntegral (cartaoIntervalo cartao)) (cartaoRepeticoes cartao) (cartaoProximaRevisao cartao)
 
--- | Os prazos saem do próprio responder, então a tela mostra o que o SM-2 vai gravar.
+-- | As previsões usam a própria função responder, então a tela mostra exatamente o que o SM-2 vai gravar.
 previsoesDe :: Day -> Cartao -> [Previsao]
-previsoesDe hoje c =
-    [ Previsao (notaValor n) (diffDays (proximaRevisao (responder n hoje (estadoDoCartao c))) hoje)
-    | n <- mapMaybe mkNota [0 .. 5]
+previsoesDe hoje cartao =
+    [ Previsao (notaValor nota) (diffDays (proximaRevisao (responder nota hoje (estadoDoCartao cartao))) hoje)
+    | nota <- mapMaybe mkNota [0 .. 5]
     ]
 
 paraRevisar :: Day -> Cartao -> ParaRevisar
-paraRevisar hoje c = ParaRevisar c (previsoesDe hoje c)
+paraRevisar hoje cartao = ParaRevisar cartao (previsoesDe hoje cartao)
 
 instance FromJSON Cartao where
-    parseJSON = withObject "Cartao" $ \o -> Cartao
-        <$> o .: "id"
-        <*> o .: "baralhoId"
-        <*> o .: "frente"
-        <*> o .: "verso"
-        <*> o .: "facilidade"
-        <*> o .: "intervalo"
-        <*> o .: "repeticoes"
-        <*> o .: "proximaRevisao"
+    parseJSON = withObject "Cartao" $ \objeto -> Cartao
+        <$> objeto .: "id"
+        <*> objeto .: "baralhoId"
+        <*> objeto .: "frente"
+        <*> objeto .: "verso"
+        <*> objeto .: "facilidade"
+        <*> objeto .: "intervalo"
+        <*> objeto .: "repeticoes"
+        <*> objeto .: "proximaRevisao"
 
-{- Os corpos de entrada falham com a mesma mensagem da validação, porque o
-formatador de erros do Server devolve o texto do fail ao cliente.
+{- Os corpos de entrada falham com a mesma mensagem da validação, porque o formatador de erros do
+Web.Server devolve ao cliente o texto passado para o fail.
 -}
 corpo :: (Object -> Parser a) -> Value -> Parser a
-corpo p (Object o) = p o
-corpo _ _          = fail "o corpo deve ser um objeto JSON"
+corpo lerObjeto (Object objeto) = lerObjeto objeto
+corpo _ _                       = fail "o corpo deve ser um objeto JSON"
 
 texto :: Text -> Text -> Object -> Parser Text
-texto chave erro o = do
-    v <- o .:? K.fromText chave
-    case v of
-        Just (String t) -> pure t
-        _               -> fail (T.unpack erro)
+texto chave erro objeto = do
+    valor <- objeto .:? K.fromText chave
+    case valor of
+        Just (String conteudo) -> pure conteudo
+        _                      -> fail (T.unpack erro)
 
-{- | Descrição, cor e padrão são opcionais; sem eles valem o texto vazio e o visual padrão. O PUT
-manda o baralho inteiro, então cor ausente na edição volta ao padrão.
+{- | Descrição, cor e padrão são opcionais. Sem eles, valem o texto vazio e o visual padrão. Como o
+PUT manda o baralho inteiro, uma edição sem cor volta para a cor padrão.
 -}
 instance FromJSON NovoBaralho where
-    parseJSON = corpo $ \o -> do
-        n <- texto "nome" erroNome o
-        d <- o .:? "descricao"
-        desc <- case d of
-            Nothing         -> pure ""
-            Just Null       -> pure ""
-            Just (String t) -> pure t
-            Just _          -> fail "descricao deve ser texto"
-        c <- opcional lerCor "cor" "cor inválida" Cobalto o
-        p <- opcional lerPadrao "padrao" "padrão inválido" Liso o
-        pure (NovoBaralho n desc (Visual c p))
+    parseJSON = corpo $ \objeto -> do
+        nomeBaralho <- texto "nome" erroNome objeto
+        descricaoRecebida <- objeto .:? "descricao"
+        descricaoBaralho <- case descricaoRecebida of
+            Nothing                -> pure ""
+            Just Null              -> pure ""
+            Just (String conteudo) -> pure conteudo
+            Just _                 -> fail "descricao deve ser texto"
+        corBaralho <- opcional lerCor "cor" "cor inválida" Cobalto objeto
+        padraoBaralho <- opcional lerPadrao "padrao" "padrão inválido" Liso objeto
+        pure (NovoBaralho nomeBaralho descricaoBaralho (Visual corBaralho padraoBaralho))
 
 opcional :: (Text -> Maybe a) -> Key -> Text -> a -> Object -> Parser a
-opcional ler chave erro padraoSe o = do
-    v <- o .:? chave
-    case v of
-        Nothing                           -> pure padraoSe
-        Just Null                         -> pure padraoSe
-        Just (String s) | Just x <- ler s -> pure x
-        _                                 -> fail (T.unpack erro)
+opcional ler chave erro valorPadrao objeto = do
+    valor <- objeto .:? chave
+    case valor of
+        Nothing                                         -> pure valorPadrao
+        Just Null                                       -> pure valorPadrao
+        Just (String conteudo) | Just lido <- ler conteudo -> pure lido
+        _                                               -> fail (T.unpack erro)
 
 instance FromJSON NovoCartao where
-    parseJSON = corpo $ \o -> NovoCartao
-        <$> texto "frente" erroFrente o
-        <*> texto "verso" erroVerso o
+    parseJSON = corpo $ \objeto -> NovoCartao
+        <$> texto "frente" erroFrente objeto
+        <*> texto "verso" erroVerso objeto
 
 instance FromJSON Resposta where
-    parseJSON = corpo $ \o -> do
-        v <- o .:? "nota"
-        case v of
-            Just (Number n) | Just i <- toBoundedInteger n -> pure (Resposta i)
+    parseJSON = corpo $ \objeto -> do
+        valor <- objeto .:? "nota"
+        case valor of
+            Just (Number numero) | Just inteiro <- toBoundedInteger numero -> pure (Resposta inteiro)
             _ -> fail (T.unpack erroNota)
 
 obrigatorio :: Text -> Text -> Either Text Text
-obrigatorio erro t
+obrigatorio erro conteudo
     | T.null limpo = Left erro
     | otherwise    = Right limpo
   where
-    limpo = T.strip t
+    limpo = T.strip conteudo
 
 validarNovoBaralho :: NovoBaralho -> Either Text NovoBaralho
-validarNovoBaralho (NovoBaralho n d v) = NovoBaralho <$> obrigatorio erroNome n <*> pure d <*> pure v
+validarNovoBaralho (NovoBaralho nomeBaralho descricaoBaralho visualBaralho) =
+    NovoBaralho <$> obrigatorio erroNome nomeBaralho <*> pure descricaoBaralho <*> pure visualBaralho
 
 validarNovoCartao :: NovoCartao -> Either Text NovoCartao
-validarNovoCartao (NovoCartao f v) =
-    NovoCartao <$> obrigatorio erroFrente f <*> obrigatorio erroVerso v
+validarNovoCartao (NovoCartao frenteCartao versoCartao) =
+    NovoCartao <$> obrigatorio erroFrente frenteCartao <*> obrigatorio erroVerso versoCartao
 
 validarResposta :: Resposta -> Either Text Nota
-validarResposta (Resposta n) = maybe (Left erroNota) Right (mkNota n)
+validarResposta (Resposta valor) = maybe (Left erroNota) Right (mkNota valor)

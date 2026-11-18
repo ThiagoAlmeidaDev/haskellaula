@@ -21,7 +21,7 @@ export const PADROES = [
   { valor: 'xadrez', nome: 'Xadrez' },
 ];
 
-/* Passos 1 a 8 das preferências em pixels; a resposta é um pouco menor que a pergunta. */
+/* Tamanho em pixels de cada passo, de 1 a 8, das preferências. A resposta fica um pouco menor que a pergunta. */
 const TAMANHO_PERGUNTA = [20, 26, 32, 40, 50, 60, 72, 86];
 const TAMANHO_RESPOSTA = [17, 21, 26, 32, 40, 48, 58, 70];
 export const TAMANHO_MAXIMO = TAMANHO_PERGUNTA.length;
@@ -32,14 +32,14 @@ export function etapaChip(etapa) {
   return h('span', { class: `etapa etapa-${etapa}` }, NOMES_ETAPA[etapa] ?? etapa);
 }
 
-export function capaMini(b) {
-  const inicial = ([...(b.nome ?? '').trim()][0] ?? '?').toLocaleUpperCase('pt-BR');
-  return h('span', { class: 'capa capa-mini', dataset: { cor: b.cor ?? 'cobalto', padrao: b.padrao ?? 'liso' }, 'aria-hidden': 'true' }, inicial);
+export function capaMini(baralho) {
+  const inicial = ([...(baralho.nome ?? '').trim()][0] ?? '?').toLocaleUpperCase('pt-BR');
+  return h('span', { class: 'capa capa-mini', dataset: { cor: baralho.cor ?? 'cobalto', padrao: baralho.padrao ?? 'liso' }, 'aria-hidden': 'true' }, inicial);
 }
 
 export function barraDominio(etapas, { grande = false } = {}) {
   const total = etapas.novos + etapas.aprendendo + etapas.dominados;
-  const largura = (n) => `width: ${total ? Math.round((n / total) * 1000) / 10 : 0}%`;
+  const largura = (quantidade) => `width: ${total ? Math.round((quantidade / total) * 1000) / 10 : 0}%`;
   return h('div', {
     class: grande ? 'dominio dominio-grande' : 'dominio', role: 'img',
     'aria-label': total
@@ -52,8 +52,8 @@ export function barraDominio(etapas, { grande = false } = {}) {
 }
 
 export function legendaDominio(etapas) {
-  const item = (classe, n, rotulo) => h('span', { class: 'legenda-item' },
-    h('span', { class: `ponto ${classe}` }), h('strong', {}, String(n)), rotulo);
+  const item = (classe, quantidade, rotulo) => h('span', { class: 'legenda-item' },
+    h('span', { class: `ponto ${classe}` }), h('strong', {}, String(quantidade)), rotulo);
   return h('div', { class: 'legenda' },
     item('ponto-dominado', etapas.dominados, etapas.dominados === 1 ? 'dominado' : 'dominados'),
     item('ponto-aprendendo', etapas.aprendendo, 'aprendendo'),
@@ -61,40 +61,40 @@ export function legendaDominio(etapas) {
 }
 
 // As etapas que existem no baralho, em texto, na mesma ordem e cor da barra.
-function resumoEtapas(e) {
+function resumoEtapas(etapas) {
   const partes = [];
-  if (e.dominados) partes.push(`${e.dominados} ${e.dominados === 1 ? 'dominado' : 'dominados'}`);
-  if (e.aprendendo) partes.push(`${e.aprendendo} aprendendo`);
-  if (e.novos) partes.push(`${e.novos} ${e.novos === 1 ? 'novo' : 'novos'}`);
+  if (etapas.dominados) partes.push(`${etapas.dominados} ${etapas.dominados === 1 ? 'dominado' : 'dominados'}`);
+  if (etapas.aprendendo) partes.push(`${etapas.aprendendo} aprendendo`);
+  if (etapas.novos) partes.push(`${etapas.novos} ${etapas.novos === 1 ? 'novo' : 'novos'}`);
   return partes.join(', ');
 }
 
 /* Linha de baralho: capa, nome que leva à página, domínio, pendência e ações sempre visíveis. */
-export function linhaBaralho(b, { aoEditar, aoExcluir } = {}) {
-  return h('li', { class: 'linha-baralho', dataset: { id: b.id } },
-    capaMini(b),
+export function linhaBaralho(baralho, { aoEditar, aoExcluir } = {}) {
+  return h('li', { class: 'linha-baralho', dataset: { id: baralho.id } },
+    capaMini(baralho),
     h('div', { class: 'lb-texto' },
-      h('a', { class: 'lb-nome', href: `#/baralho/${b.id}` }, b.nome),
-      b.descricao ? h('p', { class: 'lb-desc' }, b.descricao) : null),
+      h('a', { class: 'lb-nome', href: `#/baralho/${baralho.id}` }, baralho.nome),
+      baralho.descricao ? h('p', { class: 'lb-desc' }, baralho.descricao) : null),
     h('div', { class: 'lb-dominio' },
-      barraDominio(b.etapas),
-      h('span', { class: 'mono' }, b.totalCartoes ? resumoEtapas(b.etapas) : 'sem cartões')),
+      barraDominio(baralho.etapas),
+      h('span', { class: 'mono' }, baralho.totalCartoes ? resumoEtapas(baralho.etapas) : 'sem cartões')),
     h('div', { class: 'lb-pendencia' },
-      b.paraHoje > 0
-        ? h('span', { class: 'pendencia' }, `${b.paraHoje} para hoje`)
-        : h('span', { class: 'em-dia' }, b.totalCartoes ? 'Em dia' : 'Vazio')),
+      baralho.paraHoje > 0
+        ? h('span', { class: 'pendencia' }, `${baralho.paraHoje} para hoje`)
+        : h('span', { class: 'em-dia' }, baralho.totalCartoes ? 'Em dia' : 'Vazio')),
     h('div', { class: 'lb-acoes' },
-      b.paraHoje > 0 ? h('a', { class: 'btn btn-sec btn-sm', href: `#/estudar/${b.id}` }, 'Estudar') : null,
-      aoEditar ? h('button', { class: 'btn-icone', type: 'button', title: 'Editar baralho', 'aria-label': `Editar baralho ${b.nome}`, onclick: () => aoEditar(b) }, icone('lapis')) : null,
-      aoExcluir ? h('button', { class: 'btn-icone perigo', type: 'button', title: 'Excluir baralho', 'aria-label': `Excluir baralho ${b.nome}`, onclick: () => aoExcluir(b) }, icone('lixo')) : null,
-      h('a', { class: 'btn-icone', href: `#/baralho/${b.id}`, title: 'Abrir baralho', 'aria-label': `Abrir baralho ${b.nome}` }, icone('seta'))));
+      baralho.paraHoje > 0 ? h('a', { class: 'btn btn-sec btn-sm', href: `#/estudar/${baralho.id}` }, 'Estudar') : null,
+      aoEditar ? h('button', { class: 'btn-icone', type: 'button', title: 'Editar baralho', 'aria-label': `Editar baralho ${baralho.nome}`, onclick: () => aoEditar(baralho) }, icone('lapis')) : null,
+      aoExcluir ? h('button', { class: 'btn-icone perigo', type: 'button', title: 'Excluir baralho', 'aria-label': `Excluir baralho ${baralho.nome}`, onclick: () => aoExcluir(baralho) }, icone('lixo')) : null,
+      h('a', { class: 'btn-icone', href: `#/baralho/${baralho.id}`, title: 'Abrir baralho', 'aria-label': `Abrir baralho ${baralho.nome}` }, icone('seta'))));
 }
 
-let grupoSeq = 0;
+let contadorGrupos = 0;
 
-/* Um grupo de rádios com a aparência que cada controle pede; devolve o fieldset e um get/set. */
+/* Grupo de botões de rádio com a aparência que cada controle pede. Devolve o fieldset e as funções para mudar e ler o valor. */
 function grupoRadios({ legenda, nome, itens, valor, classeGrupo, montarItem, aoMudar }) {
-  const id = `${nome}-${(grupoSeq += 1)}`;
+  const id = `${nome}-${(contadorGrupos += 1)}`;
   const entradas = itens.map((item) => {
     const input = h('input', { type: 'radio', name: id, value: item.valor, 'aria-label': item.nome });
     input.checked = item.valor === valor;
@@ -106,7 +106,7 @@ function grupoRadios({ legenda, nome, itens, valor, classeGrupo, montarItem, aoM
     h('div', { class: classeGrupo }, entradas));
   return {
     el,
-    definir(novo) { for (const i of el.querySelectorAll('input')) i.checked = i.value === novo; },
+    definir(novo) { for (const radio of el.querySelectorAll('input')) radio.checked = radio.value === novo; },
     valor() { return el.querySelector('input:checked')?.value; },
   };
 }
@@ -123,7 +123,7 @@ export function seletorPadrao({ valor = 'liso', cor = 'cobalto', aoMudar, legend
     legenda, nome: 'padrao', itens: PADROES, valor, classeGrupo: 'amostras', aoMudar,
     montarItem: (item, input) => h('label', { class: 'amostra estampa capa', dataset: { cor, padrao: item.valor }, title: item.nome }, input),
   });
-  grupo.mudarCor = (novaCor) => { for (const l of grupo.el.querySelectorAll('.amostra')) l.dataset.cor = novaCor; };
+  grupo.mudarCor = (novaCor) => { for (const amostra of grupo.el.querySelectorAll('.amostra')) amostra.dataset.cor = novaCor; };
   return grupo;
 }
 
@@ -147,7 +147,7 @@ export function faixaTamanho({ rotulo, valor, aoMudar }) {
   input.addEventListener('input', () => { numero.textContent = input.value; aoMudar?.(Number(input.value)); });
   return {
     el: h('div', { class: 'campo' }, h('span', { class: 'campo-rotulo' }, rotulo), h('div', { class: 'faixa-tamanho' }, h('span', { 'aria-hidden': 'true' }, 'A'), input, h('span', { 'aria-hidden': 'true', style: 'font-size: 22px; font-weight: 800' }, 'A'), numero)),
-    definir(v) { input.value = String(v); numero.textContent = String(v); },
+    definir(novo) { input.value = String(novo); numero.textContent = String(novo); },
   };
 }
 
@@ -201,7 +201,7 @@ export function cartaEstudo({ pergunta, resposta, rotuloEsq = '', rotuloDir = ''
   }
 
   function capa(novaCor, novoPadrao) {
-    for (const f of el.querySelectorAll('.carta-faixa')) { f.dataset.cor = novaCor; f.dataset.padrao = novoPadrao; }
+    for (const elementoFaixa of el.querySelectorAll('.carta-faixa')) { elementoFaixa.dataset.cor = novaCor; elementoFaixa.dataset.padrao = novoPadrao; }
   }
 
   aplicar(prefs);

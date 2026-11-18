@@ -4,23 +4,23 @@ import { h } from '../../dom.js';
 import { LETREIRO } from '../conteudo.js';
 
 export function letreiro() {
-  const item = ([p, r]) => h('span', { class: 'letreiro-item' }, p, h('strong', {}, r));
+  const item = ([pergunta, resposta]) => h('span', { class: 'letreiro-item' }, pergunta, h('strong', {}, resposta));
   const linha = (lista) => h('div', { class: 'letreiro-linha', 'aria-hidden': 'true' },
     h('div', { class: 'letreiro-trilho' }, [...lista, ...lista].map(item)));
   const linhas = [linha(LETREIRO.slice(0, 6)), linha(LETREIRO.slice(6))];
   const el = h('section', { class: 'lp-sec lp-letreiro', dataset: { tom: 'sol' }, 'aria-label': 'Exemplos de cartões' },
     linhas,
-    h('p', { class: 'sr-only' }, LETREIRO.map(([p, r]) => `${p} ${r}`).join('; ')));
+    h('p', { class: 'sr-only' }, LETREIRO.map(([pergunta, resposta]) => `${pergunta} ${resposta}`).join('; ')));
 
   function animar(motor) {
     if (!motor.animado) return;
     const { gsap, ScrollTrigger } = motor;
 
     motor.no(() => {
-      const trilhos = linhas.map((l) => l.firstElementChild);
-      const voltas = trilhos.map((t, i) => gsap.fromTo(t, { xPercent: i ? -50 : 0 }, { xPercent: i ? 0 : -50, duration: i ? 52 : 44, ease: 'none', repeat: -1 }));
+      const trilhos = linhas.map((elementoDaLinha) => elementoDaLinha.firstElementChild);
+      const voltas = trilhos.map((trilho, i) => gsap.fromTo(trilho, { xPercent: i ? -50 : 0 }, { xPercent: i ? 0 : -50, duration: i ? 52 : 44, ease: 'none', repeat: -1 }));
       /* Começa longe do zero para poder andar para trás quando a página sobe. */
-      for (const v of voltas) v.totalTime(v.duration() * 200);
+      for (const volta of voltas) volta.totalTime(volta.duration() * 200);
       const inclinar = gsap.quickTo(trilhos, 'skewX', { duration: 0.5, ease: 'power3.out' });
       let segurando = false;
       let sentido = 1;
@@ -29,7 +29,7 @@ export function letreiro() {
 
       const ritmo = (extra = 0) => {
         const escala = segurando ? 0 : sentido * (1 + extra);
-        for (const v of voltas) gsap.to(v, { timeScale: escala, duration: 0.6, ease: 'power2.out', overwrite: true });
+        for (const volta of voltas) gsap.to(volta, { timeScale: escala, duration: 0.6, ease: 'power2.out', overwrite: true });
       };
 
       ScrollTrigger.create({
@@ -45,7 +45,7 @@ export function letreiro() {
             ritmo();
           });
         },
-        onToggle: (self) => { for (const v of voltas) v.paused(!self.isActive); },
+        onToggle: (self) => { for (const volta of voltas) volta.paused(!self.isActive); },
       });
 
       el.addEventListener('pointerenter', () => { segurando = true; ritmo(); });

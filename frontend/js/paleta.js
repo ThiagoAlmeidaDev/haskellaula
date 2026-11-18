@@ -1,5 +1,5 @@
-/* Paleta de comandos (Ctrl K ou Cmd K): busca sem acento em ações e baralhos da conta. Só abre
-   com sessão; os itens vêm da API a cada abertura para refletir o que mudou. */
+/* Paleta de comandos (Ctrl K ou Cmd K), com busca sem acento nas ações e nos baralhos da conta.
+   Só abre com sessão. Os itens vêm da API a cada abertura para mostrar o que mudou. */
 import { baralhos as apiBaralhos } from './api.js';
 import { h, plural, semAcento, toast } from './dom.js';
 import { pedirNovoBaralho } from './estado.js';
@@ -17,15 +17,15 @@ let carregamento = 0;
 /* Subsequência sem acento e sem caixa: "est port" acha "Estudar Português". Pontua letra seguida
    e início de palavra, para que o nome que começa com a busca suba acima do que só a contém. */
 export function pontuar(consulta, texto) {
-  const q = semAcento(consulta).replace(/\s+/g, '');
-  if (!q) return { pontos: 0, posicoes: [] };
+  const consultaLimpa = semAcento(consulta).replace(/\s+/g, '');
+  if (!consultaLimpa) return { pontos: 0, posicoes: [] };
   const alvo = semAcento(texto);
   const posicoes = [];
   let pontos = 0;
   let anterior = -2;
   let j = 0;
-  for (let i = 0; i < alvo.length && j < q.length; i += 1) {
-    if (alvo[i] !== q[j]) continue;
+  for (let i = 0; i < alvo.length && j < consultaLimpa.length; i += 1) {
+    if (alvo[i] !== consultaLimpa[j]) continue;
     pontos += 1;
     if (i === anterior + 1) pontos += 5;
     if (i === 0 || /[\s\-_/·]/.test(alvo[i - 1])) pontos += 8;
@@ -34,7 +34,7 @@ export function pontuar(consulta, texto) {
     anterior = i;
     j += 1;
   }
-  return j === q.length ? { pontos, posicoes } : null;
+  return j === consultaLimpa.length ? { pontos, posicoes } : null;
 }
 
 function itensBase(baralhos) {
@@ -48,20 +48,20 @@ function itensBase(baralhos) {
   const fim = [
     { titulo: 'Sair da conta', detalhe: 'conta', executar: () => sair().then(() => { location.hash = '#/entrar'; }, (erro) => toast(erro.message)) },
   ];
-  const porPendencia = [...baralhos].sort((a, b) => b.paraHoje - a.paraHoje);
-  for (const b of porPendencia) {
+  const porPendencia = [...baralhos].sort((baralhoA, baralhoB) => baralhoB.paraHoje - baralhoA.paraHoje);
+  for (const baralho of porPendencia) {
     lista.push({
-      titulo: `Estudar ${b.nome}`,
-      detalhe: b.paraHoje > 0 ? `${b.paraHoje} para hoje` : 'em dia',
-      executar: () => { location.hash = `#/estudar/${b.id}`; },
-      peso: b.paraHoje > 0 ? 1 : 0,
+      titulo: `Estudar ${baralho.nome}`,
+      detalhe: baralho.paraHoje > 0 ? `${baralho.paraHoje} para hoje` : 'em dia',
+      executar: () => { location.hash = `#/estudar/${baralho.id}`; },
+      peso: baralho.paraHoje > 0 ? 1 : 0,
     });
   }
-  for (const b of baralhos) {
-    lista.push({ titulo: b.nome, detalhe: plural(b.totalCartoes, 'cartão', 'cartões'), executar: () => { location.hash = `#/baralho/${b.id}`; } });
+  for (const baralho of baralhos) {
+    lista.push({ titulo: baralho.nome, detalhe: plural(baralho.totalCartoes, 'cartão', 'cartões'), executar: () => { location.hash = `#/baralho/${baralho.id}`; } });
   }
-  for (const b of baralhos) {
-    lista.push({ titulo: `Estatísticas de ${b.nome}`, detalhe: 'estatísticas', executar: () => { location.hash = `#/estatisticas/${b.id}`; } });
+  for (const baralho of baralhos) {
+    lista.push({ titulo: `Estatísticas de ${baralho.nome}`, detalhe: 'estatísticas', executar: () => { location.hash = `#/estatisticas/${baralho.id}`; } });
   }
   return [...lista, ...fim];
 }
@@ -91,11 +91,11 @@ function filtrar(consulta) {
   }
   return itens
     .map((item, ordem) => {
-      const r = pontuar(consulta, item.titulo);
-      return r && { item, posicoes: r.posicoes, pontos: r.pontos + (item.peso ?? 0), ordem };
+      const resultado = pontuar(consulta, item.titulo);
+      return resultado && { item, posicoes: resultado.posicoes, pontos: resultado.pontos + (item.peso ?? 0), ordem };
     })
     .filter(Boolean)
-    .sort((a, b) => b.pontos - a.pontos || a.ordem - b.ordem)
+    .sort((resultadoA, resultadoB) => resultadoB.pontos - resultadoA.pontos || resultadoA.ordem - resultadoB.ordem)
     .slice(0, LIMITE);
 }
 
@@ -125,9 +125,9 @@ function marcar(i) {
   const lista = dialogo().querySelector('.paleta-lista');
   lista.querySelector('[aria-selected="true"]')?.setAttribute('aria-selected', 'false');
   ativo = i;
-  const op = document.getElementById(`paleta-op-${i}`);
-  op?.setAttribute('aria-selected', 'true');
-  op?.scrollIntoView({ block: 'nearest' });
+  const opcao = document.getElementById(`paleta-op-${i}`);
+  opcao?.setAttribute('aria-selected', 'true');
+  opcao?.scrollIntoView({ block: 'nearest' });
   dialogo().querySelector('.paleta-input').setAttribute('aria-activedescendant', `paleta-op-${i}`);
 }
 
@@ -158,7 +158,7 @@ export async function abrirPaleta(consulta = '') {
   desenhar();
   input.focus();
 
-  // Respostas fora de ordem: só a última abertura da paleta pode preencher a lista.
+  // As respostas podem chegar fora de ordem, então só a última abertura da paleta pode preencher a lista.
   const minha = ++carregamento;
   try {
     const baralhos = await apiBaralhos.listar();
@@ -175,34 +175,34 @@ export function iniciarPaleta() {
   const input = el.querySelector('.paleta-input');
 
   // Ctrl K ou Cmd K funciona até dentro de campos de texto, por isso não passa pelo filtro de digitação.
-  document.addEventListener('keydown', (e) => {
-    if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === 'k') {
+  document.addEventListener('keydown', (evento) => {
+    if ((evento.ctrlKey || evento.metaKey) && !evento.altKey && evento.key.toLowerCase() === 'k') {
       if (!usuarioAtual()) return;
-      e.preventDefault();
+      evento.preventDefault();
       if (el.open) fecharPaleta();
       else abrirPaleta();
     }
   });
 
   input.addEventListener('input', () => { ativo = 0; desenhar(); });
-  input.addEventListener('keydown', (e) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
+  input.addEventListener('keydown', (evento) => {
+    if (evento.key === 'ArrowDown') {
+      evento.preventDefault();
       if (visiveis.length) marcar((ativo + 1) % visiveis.length);
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
+    } else if (evento.key === 'ArrowUp') {
+      evento.preventDefault();
       if (visiveis.length) marcar((ativo - 1 + visiveis.length) % visiveis.length);
-    } else if (e.key === 'Enter' && !e.isComposing) {
-      e.preventDefault();
+    } else if (evento.key === 'Enter' && !evento.isComposing) {
+      evento.preventDefault();
       executar(ativo);
     }
   });
-  el.addEventListener('cancel', (e) => {
-    e.preventDefault();
+  el.addEventListener('cancel', (evento) => {
+    evento.preventDefault();
     fecharPaleta();
   });
-  el.addEventListener('click', (e) => {
-    if (e.target === el) fecharPaleta();
+  el.addEventListener('click', (evento) => {
+    if (evento.target === el) fecharPaleta();
   });
 }
 

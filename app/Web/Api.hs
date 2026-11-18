@@ -1,8 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE TypeOperators #-}
 
-{- | O contrato HTTP: rotas públicas de conta e sessão, rotas da conta (exigem o cookie de
-sessão) e o Raw que serve o frontend. O tipo é a documentação das rotas.
+{- | Todas as rotas HTTP, descritas como um tipo. Ficam aqui as rotas públicas de conta e sessão,
+as rotas da conta (que exigem o cookie de sessão) e o Raw que serve o frontend. Este tipo serve
+também de documentação da API.
 -}
 module Web.Api
     ( API

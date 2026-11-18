@@ -1,6 +1,6 @@
-/* Entrada do frontend: confere a sessão, liga o roteador por hash às views e mantém a barra de
-   navegação em sintonia com quem está logado e com quantos cartões esperam hoje. Rota da conta
-   sem sessão vai para #/entrar e volta depois. */
+/* Ponto de entrada do frontend. Confere a sessão, liga o roteador por hash às views e mantém a
+   barra de navegação atualizada com quem está logado e com quantos cartões tem para hoje. Quem
+   abre uma rota da conta sem sessão vai para #/entrar e depois volta para onde queria. */
 import { api, baralhos as apiBaralhos } from './js/api.js';
 import { h, ehMac, toast, logoMarca } from './js/dom.js';
 import { iniciarGaveta, fecharGaveta } from './js/gaveta.js';
@@ -80,7 +80,7 @@ function marcarNav(nav) {
   }
 }
 
-// history.replaceState não dispara hashchange: o redirecionamento chama navegar de novo.
+// history.replaceState não dispara hashchange, por isso o redirecionamento chama navegar de novo.
 function redirecionar(hash, opcoes) {
   history.replaceState(null, '', hash);
   navegar(opcoes);
@@ -109,7 +109,7 @@ const contagemDoDia = document.querySelector('[data-contagem-dia]');
 
 async function atualizarContagemDoDia() {
   const lista = await apiBaralhos.listar();
-  const total = lista.reduce((s, b) => s + b.paraHoje, 0);
+  const total = lista.reduce((soma, baralho) => soma + baralho.paraHoje, 0);
   contagemDoDia.textContent = String(total);
   contagemDoDia.hidden = total === 0;
   contagemDoDia.setAttribute('aria-label', `${total} para hoje`);
@@ -132,9 +132,9 @@ function desenharSessao(usuario) {
   menuConta.querySelector('.menu-email').textContent = usuario.email;
 }
 
-// O popover abre fora da nav (top layer); a posição sai do botão que o abriu.
-menuConta.addEventListener('beforetoggle', (e) => {
-  if (e.newState !== 'open') return;
+// O popover abre fora da nav (no top layer), então a posição é calculada a partir do botão que o abriu.
+menuConta.addEventListener('beforetoggle', (evento) => {
+  if (evento.newState !== 'open') return;
   const caixa = botaoConta.getBoundingClientRect();
   menuConta.style.top = `${caixa.bottom + 10}px`;
   menuConta.style.right = `${Math.max(16, window.innerWidth - caixa.right)}px`;

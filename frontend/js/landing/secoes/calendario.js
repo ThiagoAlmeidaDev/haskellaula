@@ -8,12 +8,12 @@ import { CURVAS, magnetico, revelarTexto, revelarTitulo } from '../movimento.js'
 const TOTAL = 70;
 
 function diasDoExemplo(exemplo) {
-  return REVISOES_BOM.map((d) => d - exemplo.inicio).filter((d) => d >= 1 && d < TOTAL);
+  return REVISOES_BOM.map((diaDaRevisao) => diaDaRevisao - exemplo.inicio).filter((dia) => dia >= 1 && dia < TOTAL);
 }
 
 export function calendario() {
   const grade = h('div', { class: 'calendario', role: 'group', 'aria-label': 'Calendário de 70 dias' },
-    Array.from({ length: TOTAL }, (_, d) => h('span', { class: d === 0 ? 'cal-dia hoje' : 'cal-dia' }, h('span', { class: 'cal-numero' }, d === 0 ? 'hoje' : String(d)))));
+    Array.from({ length: TOTAL }, (_, dia) => h('span', { class: dia === 0 ? 'cal-dia hoje' : 'cal-dia' }, h('span', { class: 'cal-numero' }, dia === 0 ? 'hoje' : String(dia)))));
   const conta = h('p', { class: 'calendario-conta', 'aria-live': 'polite' });
   const titulo = h('h2', { class: 'lp-h2', id: 'lp-calendario' }, CALENDARIO.titulo);
   const texto = h('p', { class: 'lp-paragrafo' }, CALENDARIO.texto);
@@ -23,7 +23,7 @@ export function calendario() {
     h('button', { class: 'btn btn-pri', type: 'button', 'aria-pressed': 'false', dataset: { modo: 'bom' } }, 'Acertando sempre'),
     h('button', { class: 'btn btn-perigo', type: 'button', 'aria-pressed': 'false', dataset: { modo: 'erro' } }, 'Errando no dia 7'),
   ];
-  const imas = botoes.map((b) => h('span', { class: 'ima' }, b));
+  const imas = botoes.map((botao) => h('span', { class: 'ima' }, botao));
   const legenda = h('p', { class: 'legenda' },
     h('span', { class: 'legenda-item' }, h('span', { class: 'ponto', style: 'background: var(--cobalto)' }), 'hoje'),
     h('span', { class: 'legenda-item' }, h('span', { class: 'ponto', style: 'background: var(--sol)' }), 'dia de revisão'),
@@ -39,7 +39,7 @@ export function calendario() {
   function mostrarBalao(dia, exemplos) {
     balao.replaceChildren(
       h('p', { class: 'cal-balao-titulo' }, `Dia ${dia}`),
-      h('ul', {}, exemplos.map((e) => h('li', {}, h('span', { class: 'cal-balao-capa capa', dataset: { cor: e.cor } }), h('strong', {}, e.baralho), ` ${e.pergunta}`))));
+      h('ul', {}, exemplos.map((exemplo) => h('li', {}, h('span', { class: 'cal-balao-capa capa', dataset: { cor: exemplo.cor } }), h('strong', {}, exemplo.baralho), ` ${exemplo.pergunta}`))));
     balao.hidden = false;
     const celula = grade.children[dia];
     const meio = celula.offsetLeft + celula.offsetWidth / 2;
@@ -57,7 +57,7 @@ export function calendario() {
       esconderBalao();
       for (const dia of grade.children) {
         dia.classList.remove('marcado');
-        dia.querySelectorAll('.cal-carta, .cal-exemplo').forEach((n) => n.remove());
+        dia.querySelectorAll('.cal-carta, .cal-exemplo').forEach((elemento) => elemento.remove());
       }
     }
 
@@ -73,21 +73,21 @@ export function calendario() {
 
     function exemplos() {
       const porDia = new Map();
-      for (const e of EXEMPLOS_CALENDARIO) {
-        for (const d of diasDoExemplo(e)) porDia.set(d, [...(porDia.get(d) ?? []), e]);
+      for (const exemplo of EXEMPLOS_CALENDARIO) {
+        for (const numeroDoDia of diasDoExemplo(exemplo)) porDia.set(numeroDoDia, [...(porDia.get(numeroDoDia) ?? []), exemplo]);
       }
       const cartas = [];
-      for (const [d, lista] of [...porDia].sort((a, b) => a[0] - b[0])) {
-        const dia = grade.children[d];
-        lista.forEach((e, i) => {
-          const carta = h('span', { class: 'cal-carta capa', dataset: { cor: e.cor }, style: `--pilha: ${i}` });
+      for (const [numeroDoDia, lista] of [...porDia].sort((primeiro, segundo) => primeiro[0] - segundo[0])) {
+        const dia = grade.children[numeroDoDia];
+        lista.forEach((exemplo, i) => {
+          const carta = h('span', { class: 'cal-carta capa', dataset: { cor: exemplo.cor }, style: `--pilha: ${i}` });
           dia.append(carta);
           cartas.push({ carta, dia });
         });
-        const abrir = () => mostrarBalao(d, lista);
+        const abrir = () => mostrarBalao(numeroDoDia, lista);
         dia.append(h('button', {
           class: 'cal-exemplo', type: 'button',
-          'aria-label': `Dia ${d}: ${lista.map((e) => `${e.baralho}, ${e.pergunta}`).join('; ')}`,
+          'aria-label': `Dia ${numeroDoDia}: ${lista.map((exemplo) => `${exemplo.baralho}, ${exemplo.pergunta}`).join('; ')}`,
           onpointerenter: abrir, onfocus: abrir, onclick: abrir, onpointerleave: esconderBalao, onblur: esconderBalao,
         }));
       }
@@ -96,11 +96,11 @@ export function calendario() {
     }
 
     function cenario(chave) {
-      const c = CENARIOS[chave];
-      conta.textContent = c.texto;
-      soltar(c.dias.map((d) => {
-        const dia = grade.children[d];
-        const carta = h('span', { class: d === c.erro ? 'cal-carta errada' : 'cal-carta' });
+      const escolhido = CENARIOS[chave];
+      conta.textContent = escolhido.texto;
+      soltar(escolhido.dias.map((numeroDoDia) => {
+        const dia = grade.children[numeroDoDia];
+        const carta = h('span', { class: numeroDoDia === escolhido.erro ? 'cal-carta errada' : 'cal-carta' });
         dia.append(carta);
         const marcar = () => dia.classList.add('marcado');
         if (!motor.animado) marcar();
@@ -109,14 +109,14 @@ export function calendario() {
     }
 
     function mostrar(modo) {
-      for (const b of botoes) b.setAttribute('aria-pressed', String(b.dataset.modo === modo));
+      for (const botao of botoes) botao.setAttribute('aria-pressed', String(botao.dataset.modo === modo));
       limpar();
       if (modo === 'exemplos') exemplos();
       else cenario(modo);
     }
 
-    for (const b of botoes) b.addEventListener('click', () => mostrar(b.dataset.modo));
-    imas.forEach((i) => magnetico(motor, i, { forca: 0.22 }));
+    for (const botao of botoes) botao.addEventListener('click', () => mostrar(botao.dataset.modo));
+    imas.forEach((ima) => magnetico(motor, ima, { forca: 0.22 }));
     motor.aoDesmontar(() => soltas?.kill());
 
     revelarTitulo(motor, titulo);
@@ -125,9 +125,9 @@ export function calendario() {
       mostrar('exemplos');
       return;
     }
-    for (const b of botoes) b.setAttribute('aria-pressed', String(b.dataset.modo === 'exemplos'));
+    for (const botao of botoes) botao.setAttribute('aria-pressed', String(botao.dataset.modo === 'exemplos'));
     conta.textContent = CALENDARIO.exemplos;
-    /* As cartas caem depois da cascata da grade: as duas animam a escala das células. */
+    /* As cartas só caem depois da cascata da grade, porque as duas animam a escala das células. */
     let primeiraQueda = null;
     motor.aoDesmontar(() => primeiraQueda?.kill());
     motor.no(() => {

@@ -17,22 +17,22 @@ function saudacao() {
 }
 
 function fichaDoDia(lista) {
-  const total = lista.reduce((s, b) => s + b.paraHoje, 0);
-  const comPendencia = lista.filter((b) => b.paraHoje > 0);
+  const total = lista.reduce((soma, baralho) => soma + baralho.paraHoje, 0);
+  const comPendencia = lista.filter((baralho) => baralho.paraHoje > 0);
   let titulo;
-  let sub;
+  let subtitulo;
   let acoes;
   if (lista.length === 0) {
     titulo = 'Comece pelo primeiro baralho';
-    sub = 'Um baralho reúne os cartões de um assunto. Crie um e escreva frente e verso; o Recall cuida de quando revisar.';
+    subtitulo = 'Um baralho reúne os cartões de um assunto. Crie um e escreva frente e verso; o Recall cuida de quando revisar.';
     acoes = [h('button', { class: 'btn btn-sol btn-alto', type: 'button', onclick: pedirNovoBaralho }, icone('mais'), 'Criar baralho')];
   } else if (total === 0) {
     titulo = 'Tudo revisado por hoje';
-    sub = 'Os cartões voltam no dia que o SM‑2 agendou. Quer estudar mais? Escreva cartões novos: eles entram na revisão de hoje.';
+    subtitulo = 'Os cartões voltam no dia que o SM‑2 agendou. Quer estudar mais? Escreva cartões novos: eles entram na revisão de hoje.';
     acoes = [h('a', { class: 'btn btn-sec btn-alto', href: '#/baralhos' }, icone('mais'), 'Adicionar cartões')];
   } else {
     titulo = [h('span', { class: 'numero' }, formatarNumero(total)), total === 1 ? ' cartão espera você' : ' cartões esperam você'];
-    sub = comPendencia.length > 1
+    subtitulo = comPendencia.length > 1
       ? `Em ${comPendencia.length} baralhos. Estude tudo de uma vez ou escolha por onde começar.`
       : `Todos em ${comPendencia[0].nome}.`;
     acoes = [
@@ -44,51 +44,52 @@ function fichaDoDia(lista) {
   return h('section', { class: 'dia ficha', 'aria-labelledby': 'dia-titulo' },
     h('p', { class: 'eyebrow' }, `${saudacao()}, ${primeiroNome(usuarioAtual())}`),
     h('h1', { class: 'dia-titulo', id: 'dia-titulo', tabindex: '-1' }, titulo),
-    h('p', { class: 'dia-sub' }, sub),
+    h('p', { class: 'dia-sub' }, subtitulo),
     h('div', { class: 'dia-acoes' }, acoes));
 }
 
-/* As barras dos 14 dias usam a mesma escala entre si; o dia de hoje fica no vermelho do marcador. */
-function fichaResumo(r) {
-  const maximo = Math.max(1, ...r.atividade.map((a) => a.quantidade));
+/* As barras dos 14 dias usam a mesma escala entre si. A barra de hoje fica no vermelho do marcador. */
+function fichaResumo(resumo) {
+  const maximo = Math.max(1, ...resumo.atividade.map((diaAtividade) => diaAtividade.quantidade));
   return h('aside', { class: 'resumo ficha', 'aria-labelledby': 'resumo-titulo' },
     h('h2', { class: 'eyebrow', id: 'resumo-titulo' }, 'Seu estudo'),
     h('div', { class: 'resumo-numeros' },
-      h('div', {}, h('p', { class: 'resumo-valor' }, formatarNumero(r.sequencia)), h('p', { class: 'resumo-rotulo' }, r.sequencia === 1 ? 'dia seguido' : 'dias seguidos')),
-      h('div', {}, h('p', { class: 'resumo-valor' }, formatarNumero(r.revisoesHoje)), h('p', { class: 'resumo-rotulo' }, r.revisoesHoje === 1 ? 'revisão hoje' : 'revisões hoje'))),
-    h('div', { class: 'atividade', role: 'img', 'aria-label': `Revisões nos últimos 14 dias: ${r.atividade.map((a) => a.quantidade).join(', ')}` },
-      r.atividade.map((a, i) => h('span', {
-        class: i === r.atividade.length - 1 ? 'atividade-barra hoje' : 'atividade-barra',
-        style: `height: ${a.quantidade === 0 ? 3 : Math.max(6, Math.round((a.quantidade / maximo) * 44))}px`,
-        title: `${diaCurto(a.dia)}: ${plural(a.quantidade, 'revisão', 'revisões')}`,
+      h('div', {}, h('p', { class: 'resumo-valor' }, formatarNumero(resumo.sequencia)), h('p', { class: 'resumo-rotulo' }, resumo.sequencia === 1 ? 'dia seguido' : 'dias seguidos')),
+      h('div', {}, h('p', { class: 'resumo-valor' }, formatarNumero(resumo.revisoesHoje)), h('p', { class: 'resumo-rotulo' }, resumo.revisoesHoje === 1 ? 'revisão hoje' : 'revisões hoje'))),
+    h('div', { class: 'atividade', role: 'img', 'aria-label': `Revisões nos últimos 14 dias: ${resumo.atividade.map((diaAtividade) => diaAtividade.quantidade).join(', ')}` },
+      resumo.atividade.map((diaAtividade, i) => h('span', {
+        class: i === resumo.atividade.length - 1 ? 'atividade-barra hoje' : 'atividade-barra',
+        style: `height: ${diaAtividade.quantidade === 0 ? 3 : Math.max(6, Math.round((diaAtividade.quantidade / maximo) * 44))}px`,
+        title: `${diaCurto(diaAtividade.dia)}: ${plural(diaAtividade.quantidade, 'revisão', 'revisões')}`,
       }))),
-    h('p', { class: 'resumo-eixo', 'aria-hidden': 'true' }, h('span', {}, diaCurto(r.atividade[0].dia)), h('span', {}, 'hoje')));
+    h('p', { class: 'resumo-eixo', 'aria-hidden': 'true' }, h('span', {}, diaCurto(resumo.atividade[0].dia)), h('span', {}, 'hoje')));
 }
 
-/* Os próximos 14 dias da API (de amanhã em diante): uma coluna por dia com a contagem, todas na
-   mesma escala. Tocar num dia mostra de quais baralhos são as cartas; amanhã começa escolhido. */
+/* Os próximos 14 dias que vêm da API, a partir de amanhã. Cada dia vira uma coluna com a contagem,
+   todas na mesma escala. Tocar num dia mostra de quais baralhos são as cartas, e amanhã já começa
+   selecionado. */
 function fichaAgenda(proximos) {
-  const total = proximos.reduce((s, p) => s + p.quantidade, 0);
-  const maximo = Math.max(1, ...proximos.map((p) => p.quantidade));
-  const nomeDoDia = (p) => (diasAte(p.dia) === 1 ? 'Amanhã' : `${diaDaSemana(p.dia)}, ${diaCurto(p.dia)}`);
+  const total = proximos.reduce((soma, previsao) => soma + previsao.quantidade, 0);
+  const maximo = Math.max(1, ...proximos.map((previsao) => previsao.quantidade));
+  const nomeDoDia = (previsao) => (diasAte(previsao.dia) === 1 ? 'Amanhã' : `${diaDaSemana(previsao.dia)}, ${diaCurto(previsao.dia)}`);
   const detalhe = h('div', { class: 'agenda-detalhe', 'aria-live': 'polite' });
-  const dias = proximos.map((p) => h('button', {
+  const dias = proximos.map((previsao) => h('button', {
     class: 'agenda-dia', type: 'button', 'aria-pressed': 'false',
-    'aria-label': `${nomeDoDia(p)}: ${plural(p.quantidade, 'cartão', 'cartões')}`,
-    onclick: () => escolher(p),
+    'aria-label': `${nomeDoDia(previsao)}: ${plural(previsao.quantidade, 'cartão', 'cartões')}`,
+    onclick: () => escolher(previsao),
   },
-  h('span', { class: 'agenda-semana' }, diasAte(p.dia) === 1 ? 'amanhã' : diaDaSemana(p.dia)),
-  h('span', { class: 'agenda-data' }, diaCurto(p.dia).split(' ')[0]),
-  h('span', { class: 'agenda-barra', style: `height: ${p.quantidade === 0 ? 3 : Math.max(8, Math.round((p.quantidade / maximo) * 56))}px` }),
-  h('span', { class: 'agenda-quantidade' }, formatarNumero(p.quantidade))));
+  h('span', { class: 'agenda-semana' }, diasAte(previsao.dia) === 1 ? 'amanhã' : diaDaSemana(previsao.dia)),
+  h('span', { class: 'agenda-data' }, diaCurto(previsao.dia).split(' ')[0]),
+  h('span', { class: 'agenda-barra', style: `height: ${previsao.quantidade === 0 ? 3 : Math.max(8, Math.round((previsao.quantidade / maximo) * 56))}px` }),
+  h('span', { class: 'agenda-quantidade' }, formatarNumero(previsao.quantidade))));
 
-  function escolher(p) {
-    dias.forEach((b, i) => b.setAttribute('aria-pressed', String(proximos[i] === p)));
+  function escolher(previsao) {
+    dias.forEach((botao, i) => botao.setAttribute('aria-pressed', String(proximos[i] === previsao)));
     detalhe.replaceChildren(
-      h('p', { class: 'agenda-detalhe-titulo' }, nomeDoDia(p), ': ', h('strong', {}, plural(p.quantidade, 'cartão', 'cartões'))),
-      p.baralhos.length
-        ? h('ul', { class: 'agenda-baralhos' }, p.baralhos.map((b) => h('li', {},
-          h('a', { href: `#/baralho/${b.id}` }, b.nome), h('span', { class: 'mono' }, formatarNumero(b.quantidade)))))
+      h('p', { class: 'agenda-detalhe-titulo' }, nomeDoDia(previsao), ': ', h('strong', {}, plural(previsao.quantidade, 'cartão', 'cartões'))),
+      previsao.baralhos.length
+        ? h('ul', { class: 'agenda-baralhos' }, previsao.baralhos.map((baralho) => h('li', {},
+          h('a', { href: `#/baralho/${baralho.id}` }, baralho.nome), h('span', { class: 'mono' }, formatarNumero(baralho.quantidade)))))
         : h('p', { class: 'vazio-inline' }, 'Nenhuma carta volta neste dia.'));
   }
 
@@ -111,7 +112,7 @@ export async function renderHome(main, _params, { signal }) {
     return undefined;
   }
 
-  const comPendencia = lista.filter((b) => b.paraHoje > 0).sort((a, b) => b.paraHoje - a.paraHoje);
+  const comPendencia = lista.filter((baralho) => baralho.paraHoje > 0).sort((baralhoA, baralhoB) => baralhoB.paraHoje - baralhoA.paraHoje);
   const emDia = lista.length - comPendencia.length;
 
   let secao = null;
@@ -120,14 +121,14 @@ export async function renderHome(main, _params, { signal }) {
       h('div', { class: 'secao-cabeca' },
         h('h2', { class: 'secao-titulo', id: 'titulo-hoje' }, 'Para hoje', h('span', { class: 'mono' }, String(comPendencia.length))),
         h('a', { class: 'btn btn-sec btn-sm', href: '#/baralhos' }, `Todos os baralhos (${lista.length})`)),
-      h('ul', { class: 'lista ficha' }, comPendencia.map((b) => linhaBaralho(b))),
+      h('ul', { class: 'lista ficha' }, comPendencia.map((baralho) => linhaBaralho(baralho))),
       emDia > 0 ? h('p', { class: 'vazio-inline', style: 'margin-top: 12px' }, `${plural(emDia, 'baralho está', 'baralhos estão')} em dia.`) : null);
   } else if (lista.length) {
     secao = h('section', { class: 'secao', 'aria-labelledby': 'titulo-baralhos' },
       h('div', { class: 'secao-cabeca' },
         h('h2', { class: 'secao-titulo', id: 'titulo-baralhos' }, 'Seus baralhos', h('span', { class: 'mono' }, String(lista.length))),
         h('a', { class: 'btn btn-sec btn-sm', href: '#/baralhos' }, 'Gerenciar baralhos')),
-      h('ul', { class: 'lista ficha' }, lista.slice(0, 5).map((b) => linhaBaralho(b))));
+      h('ul', { class: 'lista ficha' }, lista.slice(0, 5).map((baralho) => linhaBaralho(baralho))));
   }
 
   main.replaceChildren(h('div', { class: 'painel-topo' }, fichaDoDia(lista), fichaResumo(resumo)),

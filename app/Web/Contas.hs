@@ -1,8 +1,9 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Handlers de cadastro, login, sessão atual e saída, e o autenticar que toda rota da conta
-roda antes de qualquer outra coisa. Falta de sessão ou senha errada é 401; e-mail repetido, 409.
+{- | Handlers de cadastro, login, sessão atual e logout, e também o autenticar, que toda rota da
+conta executa antes de qualquer outra coisa. Sem sessão ou com senha errada a resposta é 401, e
+com e-mail já cadastrado é 409.
 -}
 module Web.Contas
     ( rotasPublicas
@@ -25,7 +26,7 @@ import Web.Sessao
 semSessao :: Text
 semSessao = "faça login para continuar"
 
--- O mesmo texto para e-mail desconhecido e senha errada: a resposta não revela qual dos dois.
+-- Usada tanto para e-mail desconhecido quanto para senha errada, para não revelar qual dos dois falhou.
 credenciaisErradas :: Text
 credenciaisErradas = "e-mail ou senha incorretos"
 
@@ -35,10 +36,10 @@ autenticar pool cabecalho = case cabecalho >>= lerToken of
     Just token -> banco pool (\conn -> usuarioDaSessao conn (hashToken token)) >>= maybe (falhar err401 semSessao) pure
 
 abrirSessao :: Pool Connection -> Usuario -> Handler (ComCookie Usuario)
-abrirSessao pool u = do
+abrirSessao pool usuario = do
     token <- liftIO novoToken
-    banco pool (\conn -> criarSessao conn (usuarioId u) (hashToken token))
-    pure (addHeader (cookieSessao token) u)
+    banco pool (\conn -> criarSessao conn (usuarioId usuario) (hashToken token))
+    pure (addHeader (cookieSessao token) usuario)
 
 rotasPublicas :: Pool Connection -> Server RotasPublicas
 rotasPublicas pool = saude :<|> registrar :<|> entrar :<|> sessaoAtual :<|> sair
@@ -48,26 +49,26 @@ rotasPublicas pool = saude :<|> registrar :<|> entrar :<|> sessaoAtual :<|> sair
         _ <- banco pool (\conn -> query_ conn "SELECT 1" :: IO [Only Int])
         pure (object ["banco" .= ("ok" :: Text)])
 
-    -- Valida antes do bcrypt e do banco: corpo inválido não custa hash nem consulta.
+    -- Valida antes de calcular o bcrypt e de consultar o banco, para que um corpo inválido não custe nenhum dos dois.
     registrar corpo = do
-        NovaConta n e s <- validar (validarNovaConta corpo)
-        h <- liftIO (hashSenha s)
-        criada <- banco pool (\conn -> criarConta conn n e h)
+        NovaConta nome email senha <- validar (validarNovaConta corpo)
+        senhaHash <- liftIO (hashSenha senha)
+        criada <- banco pool (\conn -> criarConta conn nome email senhaHash)
         maybe (falhar err409 "já existe uma conta com este e-mail") (abrirSessao pool) criada
 
     entrar corpo = do
-        Credenciais e s <- validar (validarCredenciais corpo)
-        achado <- banco pool (\conn -> buscarParaLogin conn e)
+        Credenciais email senha <- validar (validarCredenciais corpo)
+        achado <- banco pool (\conn -> buscarParaLogin conn email)
         case achado of
-            Just (u, h) | senhaConfere s h -> abrirSessao pool u
-            _                              -> falhar err401 credenciaisErradas
+            Just (usuario, senhaHash) | senhaConfere senha senhaHash -> abrirSessao pool usuario
+            _                                                        -> falhar err401 credenciaisErradas
 
-    -- Sem sessão a resposta é null com 200: "quem está logado" tem resposta para o visitante também.
+    -- Sem sessão, a resposta é null com status 200, porque "quem está logado?" também tem resposta para um visitante.
     sessaoAtual cabecalho = case cabecalho >>= lerToken of
         Nothing    -> pure Nothing
         Just token -> banco pool (\conn -> usuarioDaSessao conn (hashToken token))
 
-    -- Sair sempre limpa o cookie, mesmo sem sessão válida: o navegador fica deslogado de todo jeito.
+    -- O logout sempre limpa o cookie, mesmo sem uma sessão válida, para o navegador ficar deslogado de qualquer jeito.
     sair cabecalho = do
         case cabecalho >>= lerToken of
             Just token -> banco pool (\conn -> encerrarSessao conn (hashToken token))

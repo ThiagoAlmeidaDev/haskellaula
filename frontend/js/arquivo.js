@@ -14,7 +14,7 @@ function campo(texto, separador) {
 /* O Excel só lê acento num CSV em UTF-8 quando o arquivo começa com a marca BOM. */
 export function gerarArquivo(cartoes, formato) {
   const { separador } = FORMATOS[formato];
-  const corpo = cartoes.map((c) => `${campo(c.frente, separador)}${separador}${campo(c.verso, separador)}`).join('\r\n');
+  const corpo = cartoes.map((cartao) => `${campo(cartao.frente, separador)}${separador}${campo(cartao.verso, separador)}`).join('\r\n');
   return `${formato === 'csv' ? '﻿' : ''}${corpo}\r\n`;
 }
 
@@ -24,20 +24,20 @@ function registros(texto, separador) {
   let atual = '';
   let entreAspas = false;
   for (let i = 0; i < texto.length; i += 1) {
-    const c = texto[i];
+    const caractere = texto[i];
     if (entreAspas) {
-      if (c !== '"') atual += c;
+      if (caractere !== '"') atual += caractere;
       else if (texto[i + 1] === '"') { atual += '"'; i += 1; }
       else entreAspas = false;
-    } else if (c === '"' && atual === '') entreAspas = true;
-    else if (c === separador) { registro.push(atual); atual = ''; }
-    else if (c === '\n' || c === '\r') {
-      if (c === '\r' && texto[i + 1] === '\n') i += 1;
+    } else if (caractere === '"' && atual === '') entreAspas = true;
+    else if (caractere === separador) { registro.push(atual); atual = ''; }
+    else if (caractere === '\n' || caractere === '\r') {
+      if (caractere === '\r' && texto[i + 1] === '\n') i += 1;
       registro.push(atual);
       saida.push(registro);
       registro = [];
       atual = '';
-    } else atual += c;
+    } else atual += caractere;
   }
   if (atual !== '' || registro.length) {
     registro.push(atual);
@@ -49,8 +49,8 @@ function registros(texto, separador) {
 /* O separador é o primeiro que aparece na primeira linha com conteúdo: tabulação, ponto e vírgula
    ou vírgula, nessa ordem de preferência. */
 function separadorDe(linhas) {
-  const amostra = linhas.find((l) => l.trim() && !l.startsWith('#')) ?? '';
-  return ['\t', ';', ','].find((s) => amostra.includes(s)) ?? null;
+  const amostra = linhas.find((linha) => linha.trim() && !linha.startsWith('#')) ?? '';
+  return ['\t', ';', ','].find((candidato) => amostra.includes(candidato)) ?? null;
 }
 
 const CABECALHOS = new Set(['frente', 'front', 'pergunta', 'question']);
@@ -63,14 +63,14 @@ export function lerArquivo(texto) {
   const limpo = texto.replace(/^﻿/, '');
   const linhas = limpo.split(/\r?\n/);
   const separador = separadorDe(linhas);
-  const semConfig = linhas.filter((l) => !/^#[a-z ]+:/i.test(l)).join('\n');
-  const lidos = separador ? registros(semConfig, separador) : semConfig.split('\n').map((l) => [l]);
+  const semConfig = linhas.filter((linha) => !/^#[a-z ]+:/i.test(linha)).join('\n');
+  const lidos = separador ? registros(semConfig, separador) : semConfig.split('\n').map((linha) => [linha]);
   const itens = lidos
-    .filter((r) => r.some((c) => c.trim()))
-    .map((r) => {
-      const frente = (r[0] ?? '').trim();
-      const verso = (r[1] ?? '').trim();
-      return frente && verso ? { frente, verso, valida: true } : { linha: r.join(separador ?? '').trim(), valida: false };
+    .filter((registro) => registro.some((coluna) => coluna.trim()))
+    .map((registro) => {
+      const frente = (registro[0] ?? '').trim();
+      const verso = (registro[1] ?? '').trim();
+      return frente && verso ? { frente, verso, valida: true } : { linha: registro.join(separador ?? '').trim(), valida: false };
     });
   const primeiro = itens[0];
   if (primeiro?.valida && CABECALHOS.has(primeiro.frente.toLowerCase())) itens.shift();

@@ -24,8 +24,8 @@ function suportaWebGL2() {
   return true;
 }
 
-/* "pleno" ganha a cena 3D e o scroll suave; "leve" (toque, tela estreita, pouca CPU, economia de
-   dados ou sem WebGL2) mantém a coreografia em DOM; "reduzido" mostra tudo parado. */
+/* O perfil "pleno" ganha a cena 3D e o scroll suave. O "leve" (toque, tela estreita, pouca CPU,
+   economia de dados ou sem WebGL2) mantém a coreografia em DOM. O "reduzido" mostra tudo parado. */
 export function perfilDeMovimento() {
   if (matchMedia('(prefers-reduced-motion: reduce)').matches) return 'reduzido';
   const ponteiroFino = matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -59,28 +59,28 @@ export function criarMotor(raiz, perfil) {
     animado: perfil !== 'reduzido',
     ponteiroFino: matchMedia('(hover: hover) and (pointer: fine)').matches,
 
-    no(fn) { return contexto.add(fn); },
-    aoDesmontar(fn) { desfazer.push(fn); },
+    no(funcao) { return contexto.add(funcao); },
+    aoDesmontar(funcao) { desfazer.push(funcao); },
 
     atualizar() { ScrollTrigger.refresh(); },
 
     desmontar() {
       contexto.revert();
-      for (const fn of desfazer.splice(0).reverse()) fn();
+      for (const funcao of desfazer.splice(0).reverse()) funcao();
     },
   };
 }
 
-/* Ímã: o invólucro do botão segue o ponteiro dentro de um raio e volta com mola ao sair. Move o
-   invólucro, não o botão, para o afundar do .btn continuar no CSS. */
+/* Efeito de ímã. O invólucro do botão segue o ponteiro dentro de um raio e volta com mola ao sair.
+   Quem se move é o invólucro e não o botão, para o afundar do .btn continuar no CSS. */
 export function magnetico(motor, involucro, { forca = 0.32 } = {}) {
   if (!motor.animado || !motor.ponteiroFino) return;
   const { gsap } = motor;
-  const mover = (e) => {
+  const mover = (evento) => {
     const caixa = involucro.getBoundingClientRect();
-    const dx = e.clientX - (caixa.left + caixa.width / 2);
-    const dy = e.clientY - (caixa.top + caixa.height / 2);
-    gsap.to(involucro, { x: dx * forca, y: dy * forca, duration: 0.5, ease: 'power3.out', overwrite: true });
+    const distanciaX = evento.clientX - (caixa.left + caixa.width / 2);
+    const distanciaY = evento.clientY - (caixa.top + caixa.height / 2);
+    gsap.to(involucro, { x: distanciaX * forca, y: distanciaY * forca, duration: 0.5, ease: 'power3.out', overwrite: true });
   };
   const soltar = () => gsap.to(involucro, { x: 0, y: 0, duration: 0.9, ease: 'elastic.out(1, 0.38)', overwrite: true });
   involucro.addEventListener('pointermove', mover);

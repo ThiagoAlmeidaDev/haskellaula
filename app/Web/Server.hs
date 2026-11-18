@@ -1,8 +1,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Monta a aplicação WAI: liga as rotas públicas e as da conta ao tipo da API, troca os erros
-padrão do Servant pelo envelope {"erro": ...} e serve o frontend de frontend/ para o resto.
+{- | Monta a aplicação WAI. Liga as rotas públicas e as da conta ao tipo da API, troca os erros
+padrão do Servant pelo formato {"erro": ...} e serve os arquivos de frontend/ para todo o resto.
 -}
 module Web.Server
     ( aplicacao
@@ -22,12 +22,13 @@ import Web.Baralhos (rotasDaConta)
 import Web.Comum (corpoErro, erroJson)
 import Web.Contas (autenticar, rotasPublicas)
 
-{- O aeson prefixa as falhas do parseJSON com "Error in <caminho>: ". O texto depois
-do prefixo é a mensagem dos FromJSON de Nucleo; sem o prefixo, o corpo nem é JSON.
+{- O aeson coloca "Error in <caminho>: " antes da mensagem de falha do parseJSON. O que vem
+depois disso é a mensagem escrita nos FromJSON do Nucleo. Se o prefixo não estiver lá, o corpo
+nem chegou a ser um JSON válido.
 -}
 mensagemDoCorpo :: String -> Text
 mensagemDoCorpo bruta = case T.stripPrefix "Error in " (T.pack bruta) of
-    Just resto | msg <- T.drop 2 (snd (T.breakOn ": " resto)), not (T.null msg) -> msg
+    Just resto | mensagem <- T.drop 2 (snd (T.breakOn ": " resto)), not (T.null mensagem) -> mensagem
     _ -> "JSON inválido"
 
 formatadores :: ErrorFormatters
@@ -41,25 +42,27 @@ servidor pool = (rotasPublicas pool :<|> daConta) :<|> arquivos
   where
     daConta cabecalho = rotasDaConta pool (autenticar pool cabecalho)
 
-{- O Raw recebe tudo que nenhuma rota casou, inclusive o que começa com /api. Ali a resposta
-segue o envelope de erro da API em vez do servidor de arquivos.
+{- O Raw recebe tudo que não casou com nenhuma rota, inclusive caminhos que começam com /api.
+Nesses casos a resposta usa o formato de erro da API, e não o do servidor de arquivos.
 -}
 arquivos :: Server Raw
-arquivos = Tagged $ \req enviar -> case pathInfo req of
-    ("api" : _) -> let (status, msg) = erroDaApi req
-                   in enviar (responseLBS status [(hContentType, "application/json")] (corpoErro msg))
-    _           -> estatico req enviar
+arquivos = Tagged $ \requisicao enviar -> case pathInfo requisicao of
+    ("api" : _) -> let (status, mensagem) = erroDaApi requisicao
+                   in enviar (responseLBS status [(hContentType, "application/json")] (corpoErro mensagem))
+    _           -> estatico requisicao enviar
   where
     Tagged estatico = serveDirectoryFileServer "frontend"
 
--- Uma rota da API com corpo de outro tipo não casa e chega aqui; por isso o 415 antes do 404.
+{- Uma rota da API chamada com um corpo que não é JSON não casa com nenhuma rota e acaba caindo
+aqui. Por isso o 415 é testado antes do 404.
+-}
 erroDaApi :: Request -> (Status, Text)
-erroDaApi req
-    | requestMethod req `elem` [methodPost, methodPut], not corpoJson =
+erroDaApi requisicao
+    | requestMethod requisicao `elem` [methodPost, methodPut], not corpoJson =
         (status415, "o corpo deve ser enviado como application/json")
     | otherwise = (status404, "rota não encontrada")
   where
-    corpoJson = maybe False ("application/json" `BS.isPrefixOf`) (lookup hContentType (requestHeaders req))
+    corpoJson = maybe False ("application/json" `BS.isPrefixOf`) (lookup hContentType (requestHeaders requisicao))
 
 aplicacao :: Pool Connection -> Application
 aplicacao pool = serveWithContext api (formatadores :. EmptyContext) (servidor pool)

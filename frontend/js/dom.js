@@ -1,4 +1,4 @@
-/* Utilitários de DOM e de texto que toda view usa: h() e s() para montar elementos sem HTML
+/* Utilitários de DOM e de texto que toda view usa: h() e svg() para montar elementos sem HTML
    em string, ícones SVG próprios, datas no dia local, plural, toast e diálogo de confirmação. */
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -31,7 +31,7 @@ export function h(tag, attrs = {}, ...filhos) {
   return el;
 }
 
-export function s(tag, attrs = {}, ...filhos) {
+export function svg(tag, attrs = {}, ...filhos) {
   const el = document.createElementNS(SVG_NS, tag);
   aplicarAtributos(el, attrs);
   anexar(el, filhos);
@@ -61,19 +61,19 @@ const ICONES = {
 };
 
 export function icone(nome) {
-  return s('svg', { class: 'icon', viewBox: '0 0 16 16', 'aria-hidden': 'true' },
-    ICONES[nome].map((d) => s('path', { d })));
+  return svg('svg', { class: 'icon', viewBox: '0 0 16 16', 'aria-hidden': 'true' },
+    ICONES[nome].map((caminho) => svg('path', { d: caminho })));
 }
 
-// A marca do Recall: duas cartas, a de trás amarela e inclinada, a da frente cobalto com o R.
+// Logo do Recall. São duas cartas, a de trás amarela e inclinada e a da frente cobalto com o R.
 export function logoMarca(classe = 'logo-mark') {
-  return s('svg', { class: classe, viewBox: '0 0 40 40', 'aria-hidden': 'true' },
-    s('rect', { x: '5', y: '8', width: '22', height: '28', rx: '5', transform: 'rotate(-14 16 22)', fill: 'var(--sol)', stroke: '#000', 'stroke-width': '2.5' }),
-    s('rect', { x: '13', y: '5', width: '22', height: '28', rx: '5', fill: 'var(--cobalto)', stroke: '#000', 'stroke-width': '2.5' }),
-    s('path', { d: 'M20 25V13h4.5a3.5 3.5 0 0 1 0 7H20m4 0 4 5', fill: 'none', stroke: '#fff', 'stroke-width': '2.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
+  return svg('svg', { class: classe, viewBox: '0 0 40 40', 'aria-hidden': 'true' },
+    svg('rect', { x: '5', y: '8', width: '22', height: '28', rx: '5', transform: 'rotate(-14 16 22)', fill: 'var(--sol)', stroke: '#000', 'stroke-width': '2.5' }),
+    svg('rect', { x: '13', y: '5', width: '22', height: '28', rx: '5', fill: 'var(--cobalto)', stroke: '#000', 'stroke-width': '2.5' }),
+    svg('path', { d: 'M20 25V13h4.5a3.5 3.5 0 0 1 0 7H20m4 0 4 5', fill: 'none', stroke: '#fff', 'stroke-width': '2.6', 'stroke-linecap': 'round', 'stroke-linejoin': 'round' }));
 }
 
-/* O download sai de um link temporário para um Blob; o endereço é liberado logo depois do clique. */
+/* O download é feito por um link temporário que aponta para um Blob, e o endereço é liberado logo depois do clique. */
 export function baixarArquivo(nome, texto, tipo) {
   const url = URL.createObjectURL(new Blob([texto], { type: tipo }));
   const link = h('a', { href: url, download: nome, hidden: true });
@@ -87,13 +87,13 @@ export function kbd(texto) {
   return h('kbd', {}, texto);
 }
 
-export function plural(n, singular, pluralForma) {
-  return `${formatarNumero(n)} ${n === 1 ? singular : pluralForma}`;
+export function plural(quantidade, singular, pluralForma) {
+  return `${formatarNumero(quantidade)} ${quantidade === 1 ? singular : pluralForma}`;
 }
 
 const numero = new Intl.NumberFormat('pt-BR');
-export function formatarNumero(n) {
-  return numero.format(n);
+export function formatarNumero(valor) {
+  return numero.format(valor);
 }
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
@@ -116,8 +116,8 @@ export function diasAte(texto) {
 }
 
 export function diaCurto(texto) {
-  const d = lerDia(texto);
-  return `${d.getDate()} ${MESES[d.getMonth()]}`;
+  const data = lerDia(texto);
+  return `${data.getDate()} ${MESES[data.getMonth()]}`;
 }
 
 export function diaDaSemana(texto) {

@@ -1,5 +1,5 @@
-{- | Núcleo puro do algoritmo SM-2: a nota de 0 a 5 (só existe válida), o estado de
-agendamento de um cartão e a função que calcula o próximo estado a partir da resposta.
+{- | O algoritmo SM-2. Define a nota de 0 a 5 (que só pode ser criada com um valor válido), o
+estado de agendamento de um cartão e a função que calcula o próximo estado depois de uma resposta.
 -}
 module Nucleo.SM2
     ( Nota
@@ -12,16 +12,16 @@ module Nucleo.SM2
 
 import Data.Time (Day, addDays)
 
--- O construtor fica escondido para que toda Nota em circulação esteja entre 0 e 5.
+-- O construtor não é exportado, então toda Nota que existe no programa está entre 0 e 5.
 newtype Nota = Nota Int deriving (Eq, Show)
 
 mkNota :: Int -> Maybe Nota
-mkNota n
-    | n >= 0 && n <= 5 = Just (Nota n)
-    | otherwise        = Nothing
+mkNota valor
+    | valor >= 0 && valor <= 5 = Just (Nota valor)
+    | otherwise                = Nothing
 
 notaValor :: Nota -> Int
-notaValor (Nota n) = n
+notaValor (Nota valor) = valor
 
 data EstadoCartao = EstadoCartao
     { facilidade     :: Double
@@ -33,20 +33,21 @@ data EstadoCartao = EstadoCartao
 estadoInicial :: Day -> EstadoCartao
 estadoInicial hoje = EstadoCartao 2.5 0 0 hoje
 
-{- | SM-2 clássico (Wozniak, 1990). A facilidade é recalculada a cada resposta,
-inclusive nas erradas, e nunca desce de 1.3. O intervalo é contado a partir de
-hoje, não da data agendada, então responder um cartão atrasado não acumula atraso.
+{- | SM-2 clássico (Wozniak, 1990). A facilidade é recalculada em toda resposta, inclusive nas
+erradas, e nunca fica abaixo de 1.3. O intervalo é contado a partir de hoje, e não da data que
+estava agendada, para que responder um cartão atrasado não acumule o atraso.
 -}
 responder :: Nota -> Day -> EstadoCartao -> EstadoCartao
-responder (Nota q) hoje e = EstadoCartao novaFacilidade novoIntervalo novasRepeticoes (addDays novoIntervalo hoje)
+responder (Nota nota) hoje estado = EstadoCartao novaFacilidade novoIntervalo novasRepeticoes (addDays novoIntervalo hoje)
   where
-    d = fromIntegral (5 - q)
-    novaFacilidade = max 1.3 (facilidade e + (0.1 - d * (0.08 + d * 0.02)))
+    -- Quanto a nota ficou abaixo da máxima: 0 para nota 5, 5 para nota 0.
+    distanciaDoMaximo = fromIntegral (5 - nota)
+    novaFacilidade = max 1.3 (facilidade estado + (0.1 - distanciaDoMaximo * (0.08 + distanciaDoMaximo * 0.02)))
     novoIntervalo
-        | q < 3              = 1
-        | repeticoes e == 0  = 1
-        | repeticoes e == 1  = 6
-        | otherwise          = round (fromInteger (intervalo e) * novaFacilidade)
+        | nota < 3                = 1
+        | repeticoes estado == 0  = 1
+        | repeticoes estado == 1  = 6
+        | otherwise               = round (fromInteger (intervalo estado) * novaFacilidade)
     novasRepeticoes
-        | q < 3     = 0
-        | otherwise = repeticoes e + 1
+        | nota < 3  = 0
+        | otherwise = repeticoes estado + 1

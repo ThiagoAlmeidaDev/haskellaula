@@ -11,18 +11,18 @@ export function jeito() {
   let capa = { cor: 'chiclete', padrao: 'bolinhas' };
   let tocar = () => {};
   const carta = cartaEstudo({ ...JEITO.carta, ...capa, prefs });
-  const mudar = (m) => {
-    prefs = { ...prefs, ...m };
+  const mudar = (mudancas) => {
+    prefs = { ...prefs, ...mudancas };
     carta.aplicar(prefs);
     tocar();
   };
-  const mudarCapa = (m) => {
-    capa = { ...capa, ...m };
+  const mudarCapa = (mudancas) => {
+    capa = { ...capa, ...mudancas };
     carta.capa(capa.cor, capa.padrao);
     tocar();
   };
-  const padrao = seletorPadrao({ valor: capa.padrao, cor: capa.cor, aoMudar: (v) => mudarCapa({ padrao: v }) });
-  const cor = seletorCor({ valor: capa.cor, aoMudar: (v) => { padrao.mudarCor(v); mudarCapa({ cor: v }); } });
+  const padrao = seletorPadrao({ valor: capa.padrao, cor: capa.cor, aoMudar: (valor) => mudarCapa({ padrao: valor }) });
+  const cor = seletorCor({ valor: capa.cor, aoMudar: (valor) => { padrao.mudarCor(valor); mudarCapa({ cor: valor }); } });
   const virar = h('button', { class: 'btn btn-sol', type: 'button' });
   const rotular = () => virar.replaceChildren(icone('virar'), carta.revelada ? 'Esconder a resposta' : 'Mostrar a resposta');
   virar.addEventListener('click', () => { carta.alternar(); rotular(); });
@@ -32,9 +32,9 @@ export function jeito() {
   const controles = [
     cor.el,
     padrao.el,
-    faixaTamanho({ rotulo: 'Tamanho do texto', valor: 3, aoMudar: (v) => mudar({ tamanhoPergunta: v, tamanhoResposta: v }) }).el,
+    faixaTamanho({ rotulo: 'Tamanho do texto', valor: 3, aoMudar: (valor) => mudar({ tamanhoPergunta: valor, tamanhoResposta: valor }) }).el,
     seletorOpcoes({
-      legenda: 'Fonte', nome: 'fonte-lp', valor: 'sem-serifa', aoMudar: (v) => mudar({ fonte: v }),
+      legenda: 'Fonte', nome: 'fonte-lp', valor: 'sem-serifa', aoMudar: (valor) => mudar({ fonte: valor }),
       itens: [
         { valor: 'sem-serifa', nome: 'Sem serifa' },
         { valor: 'serifa', nome: 'Serifa', estilo: 'font-family: var(--fonte-serifa); font-size: 17px' },
@@ -42,10 +42,10 @@ export function jeito() {
       ],
     }).el,
     seletorOpcoes({
-      legenda: 'Ao mostrar a resposta', nome: 'revelar-lp', valor: 'virar', aoMudar: (v) => mudar({ revelar: v }),
+      legenda: 'Ao mostrar a resposta', nome: 'revelar-lp', valor: 'virar', aoMudar: (valor) => mudar({ revelar: valor }),
       itens: [{ valor: 'virar', nome: 'Virar a carta' }, { valor: 'abaixo', nome: 'Mostrar embaixo' }],
     }).el,
-    chave({ rotulo: 'Manter a pergunta depois de revelar', valor: true, aoMudar: (v) => mudar({ mostrarPergunta: v }) }).el,
+    chave({ rotulo: 'Manter a pergunta depois de revelar', valor: true, aoMudar: (valor) => mudar({ mostrarPergunta: valor }) }).el,
   ];
   const titulo = h('h2', { class: 'lp-h2', id: 'lp-jeito' }, JEITO.titulo);
   const texto = h('p', { class: 'lp-paragrafo' }, JEITO.texto);

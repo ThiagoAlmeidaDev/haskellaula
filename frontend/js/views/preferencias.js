@@ -1,6 +1,6 @@
 /* Preferências de estudo da conta: tamanho e fonte do texto, como a resposta aparece, se a
    pergunta continua visível, a ordem da sessão e o tema. Cada mudança aparece na carta de exemplo
-   na hora e é gravada sozinha depois de uma pausa curta; o tema muda a página inteira. */
+   na hora e é gravada sozinha depois de uma pausa curta. O tema muda a página inteira. */
 import { h, icone, kbd, toast } from '../dom.js';
 import { aplicarTema, preferenciasAtuais, salvarPreferencias } from '../sessao.js';
 import { cartaEstudo, chave, faixaTamanho, seletorOpcoes } from './componentes.js';
@@ -20,7 +20,7 @@ export async function renderPreferencias(main) {
   const atualizarBotao = () => virar.replaceChildren(icone('virar'), exemplo.revelada ? 'Esconder a resposta' : 'Mostrar a resposta');
   atualizarBotao();
 
-  /* Gravação com pausa: arrastar a faixa de tamanho não manda um PUT a cada passo. */
+  /* Grava só depois de uma pausa, para que arrastar a faixa de tamanho não mande um PUT a cada passo. */
   function mudar(mudanca) {
     prefs = { ...prefs, ...mudanca };
     exemplo.aplicar(prefs);
@@ -44,10 +44,10 @@ export async function renderPreferencias(main) {
     }
   }
 
-  const tamPergunta = faixaTamanho({ rotulo: 'Tamanho da pergunta', valor: prefs.tamanhoPergunta, aoMudar: (v) => mudar({ tamanhoPergunta: v }) });
-  const tamResposta = faixaTamanho({ rotulo: 'Tamanho da resposta', valor: prefs.tamanhoResposta, aoMudar: (v) => mudar({ tamanhoResposta: v }) });
+  const tamanhoDaPergunta = faixaTamanho({ rotulo: 'Tamanho da pergunta', valor: prefs.tamanhoPergunta, aoMudar: (valor) => mudar({ tamanhoPergunta: valor }) });
+  const tamanhoDaResposta = faixaTamanho({ rotulo: 'Tamanho da resposta', valor: prefs.tamanhoResposta, aoMudar: (valor) => mudar({ tamanhoResposta: valor }) });
   const fonte = seletorOpcoes({
-    legenda: 'Fonte da carta', nome: 'fonte', valor: prefs.fonte, aoMudar: (v) => mudar({ fonte: v }),
+    legenda: 'Fonte da carta', nome: 'fonte', valor: prefs.fonte, aoMudar: (valor) => mudar({ fonte: valor }),
     itens: [
       { valor: 'sem-serifa', nome: 'Sem serifa', rotulo: 'Sem serifa' },
       { valor: 'serifa', nome: 'Serifa', rotulo: 'Serifa', estilo: 'font-family: var(--fonte-serifa); font-size: 17px' },
@@ -55,16 +55,16 @@ export async function renderPreferencias(main) {
     ],
   });
   const revelar = seletorOpcoes({
-    legenda: 'Ao mostrar a resposta', nome: 'revelar', valor: prefs.revelar, aoMudar: (v) => mudar({ revelar: v }),
+    legenda: 'Ao mostrar a resposta', nome: 'revelar', valor: prefs.revelar, aoMudar: (valor) => mudar({ revelar: valor }),
     itens: [
       { valor: 'virar', nome: 'Virar a carta' },
       { valor: 'abaixo', nome: 'Mostrar embaixo da pergunta' },
     ],
   });
-  const mostrarPergunta = chave({ rotulo: 'Manter a pergunta na carta depois de revelar', valor: prefs.mostrarPergunta, aoMudar: (v) => mudar({ mostrarPergunta: v }) });
-  const embaralhar = chave({ rotulo: 'Embaralhar a ordem dos cartões em cada sessão', valor: prefs.embaralhar, aoMudar: (v) => mudar({ embaralhar: v }) });
+  const mostrarPergunta = chave({ rotulo: 'Manter a pergunta na carta depois de revelar', valor: prefs.mostrarPergunta, aoMudar: (valor) => mudar({ mostrarPergunta: valor }) });
+  const embaralhar = chave({ rotulo: 'Embaralhar a ordem dos cartões em cada sessão', valor: prefs.embaralhar, aoMudar: (valor) => mudar({ embaralhar: valor }) });
   const tema = seletorOpcoes({
-    legenda: 'Tema', nome: 'tema', valor: prefs.tema, aoMudar: (v) => mudar({ tema: v }),
+    legenda: 'Tema', nome: 'tema', valor: prefs.tema, aoMudar: (valor) => mudar({ tema: valor }),
     itens: [
       { valor: 'claro', nome: 'Claro' },
       { valor: 'escuro', nome: 'Escuro' },
@@ -80,7 +80,7 @@ export async function renderPreferencias(main) {
     h('div', { class: 'prefs' },
       h('div', {},
         h('section', { class: 'prefs-grupo ficha', 'aria-labelledby': 'prefs-texto' },
-          h('h2', { id: 'prefs-texto' }, 'Texto da carta'), tamPergunta.el, tamResposta.el, fonte.el),
+          h('h2', { id: 'prefs-texto' }, 'Texto da carta'), tamanhoDaPergunta.el, tamanhoDaResposta.el, fonte.el),
         h('section', { class: 'prefs-grupo ficha', 'aria-labelledby': 'prefs-revelar' },
           h('h2', { id: 'prefs-revelar' }, 'Na hora da resposta'), revelar.el, mostrarPergunta.el),
         h('section', { class: 'prefs-grupo ficha', 'aria-labelledby': 'prefs-sessao' },

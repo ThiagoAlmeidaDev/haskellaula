@@ -57,7 +57,7 @@ export async function montarLanding(main) {
 
   main.classList.add('main-landing');
   document.body.dataset.landing = perfil;
-  main.append(...secoes.map((s) => s.el));
+  main.append(...secoes.map((secao) => secao.el));
 
   const motor = criarMotor(main, perfil);
   for (const secao of secoes) secao.animar(motor);

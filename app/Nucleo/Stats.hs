@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Núcleo puro dos números: as estatísticas de um baralho e o resumo de estudo da conta
-(revisões de hoje, sequência de dias, atividade recente e os próximos dias de revisão).
-Recebe "hoje" como argumento.
+{- | Os números do app: as estatísticas de um baralho e o resumo de estudo da conta (revisões de
+hoje, sequência de dias, atividade recente e os próximos dias de revisão). Como o resto do
+Nucleo, recebe "hoje" como argumento em vez de ler o relógio.
 -}
 module Nucleo.Stats
     ( Estatisticas (..)
@@ -22,122 +22,131 @@ import Data.Time (Day, addDays)
 import Nucleo.Types (Cartao (..))
 
 data Estatisticas = Estatisticas
-    { eTotal          :: Int
-    , eParaHoje       :: Int
-    , eTotalRevisoes  :: Int
-    , eTaxaAcerto     :: Double
-    , ePrevisao       :: [(Day, Int)]
-    , eDificeis       :: [Cartao]
-    , eRevisoesPorDia :: [(Day, Int)]
+    { estatisticasTotal          :: Int
+    , estatisticasParaHoje       :: Int
+    , estatisticasTotalRevisoes  :: Int
+    , estatisticasTaxaAcerto     :: Double
+    , estatisticasPrevisao       :: [(Day, Int)]
+    , estatisticasDificeis       :: [Cartao]
+    , estatisticasRevisoesPorDia :: [(Day, Int)]
     } deriving (Eq, Show)
 
--- Revisões e acertos somados juntos, numa passada só pelo foldMap.
+-- Guarda o total de revisões e o de acertos, para somar os dois numa passada só com foldMap.
 data Placar = Placar Int Int
 
 instance Semigroup Placar where
-    Placar r a <> Placar r' a' = Placar (r + r') (a + a')
+    Placar revisoes acertos <> Placar outrasRevisoes outrosAcertos =
+        Placar (revisoes + outrasRevisoes) (acertos + outrosAcertos)
 
 instance Monoid Placar where
     mempty = Placar 0 0
 
 placar :: Int -> Placar
-placar n
-    | n >= 3    = Placar 1 1
+placar nota
+    | nota >= 3 = Placar 1 1
     | otherwise = Placar 1 0
 
-{- | Recebe hoje, os cartões do baralho e as revisões como (dia local, nota).
-Atrasados entram no dia de hoje da previsão, que vai de hoje a hoje+6; a janela
-de revisões vai de hoje-29 a hoje, com zero nos dias sem revisão. Acerto é nota
-3 ou mais, a mesma fronteira do SM-2. Difíceis: facilidade abaixo de 2.0, as 5
-menores, empate pelo id.
+{- | Recebe hoje, os cartões do baralho e as revisões como pares (dia local, nota).
+
+A previsão vai de hoje até hoje+6, e os cartões atrasados entram no dia de hoje. As revisões por
+dia cobrem de hoje-29 até hoje, com zero nos dias sem revisão. Conta como acerto a nota 3 ou
+mais, o mesmo limite do SM-2. Os difíceis são os 5 cartões com facilidade mais baixa entre os que
+estão abaixo de 2.0, desempatados pelo id.
 -}
 calcularEstatisticas :: Day -> [Cartao] -> [(Day, Int)] -> Estatisticas
 calcularEstatisticas hoje cartoes notas = Estatisticas
-    { eTotal          = length cartoes
-    , eParaHoje       = length [c | c <- cartoes, cProximaRevisao c <= hoje]
-    , eTotalRevisoes  = revisoes
-    , eTaxaAcerto     = taxa
-    , ePrevisao       = [(d, length [c | c <- cartoes, diaPrevisto c == d]) | d <- dias 0 6]
-    , eDificeis       = take 5 (sortOn (\c -> (cFacilidade c, cartaoId c)) [c | c <- cartoes, cFacilidade c < 2.0])
-    , eRevisoesPorDia = [(d, length [n | (d', n) <- notas, d' == d]) | d <- dias (-29) 0]
+    { estatisticasTotal          = length cartoes
+    , estatisticasParaHoje       = length [cartao | cartao <- cartoes, cartaoProximaRevisao cartao <= hoje]
+    , estatisticasTotalRevisoes  = totalRevisoes
+    , estatisticasTaxaAcerto     = taxa
+    , estatisticasPrevisao       = [(dia, length [cartao | cartao <- cartoes, diaPrevisto cartao == dia]) | dia <- dias 0 6]
+    , estatisticasDificeis       = take 5 (sortOn (\cartao -> (cartaoFacilidade cartao, cartaoId cartao)) [cartao | cartao <- cartoes, cartaoFacilidade cartao < 2.0])
+    , estatisticasRevisoesPorDia = [(dia, length [nota | (diaDaNota, nota) <- notas, diaDaNota == dia]) | dia <- dias (-29) 0]
     }
   where
-    Placar revisoes acertos = foldMap (placar . snd) notas
+    Placar totalRevisoes totalAcertos = foldMap (placar . snd) notas
     taxa
-        | revisoes == 0 = 0
-        | otherwise     = fromIntegral acertos / fromIntegral revisoes
-    diaPrevisto c = max hoje (cProximaRevisao c)
-    dias de ate = [addDays i hoje | i <- [de .. ate]]
+        | totalRevisoes == 0 = 0
+        | otherwise          = fromIntegral totalAcertos / fromIntegral totalRevisoes
+    diaPrevisto cartao = max hoje (cartaoProximaRevisao cartao)
+    dias inicio fim = [addDays deslocamento hoje | deslocamento <- [inicio .. fim]]
 
 diaQuantidade :: (Day, Int) -> Value
-diaQuantidade (d, q) = object ["dia" .= d, "quantidade" .= q]
+diaQuantidade (dia, quantidade) = object ["dia" .= dia, "quantidade" .= quantidade]
 
 instance ToJSON Estatisticas where
-    toJSON e = object
-        [ "total"          .= eTotal e
-        , "paraHoje"       .= eParaHoje e
-        , "totalRevisoes"  .= eTotalRevisoes e
-        , "taxaAcerto"     .= eTaxaAcerto e
-        , "previsao"       .= map diaQuantidade (ePrevisao e)
-        , "dificeis"       .= eDificeis e
-        , "revisoesPorDia" .= map diaQuantidade (eRevisoesPorDia e)
+    toJSON estatisticas = object
+        [ "total"          .= estatisticasTotal estatisticas
+        , "paraHoje"       .= estatisticasParaHoje estatisticas
+        , "totalRevisoes"  .= estatisticasTotalRevisoes estatisticas
+        , "taxaAcerto"     .= estatisticasTaxaAcerto estatisticas
+        , "previsao"       .= map diaQuantidade (estatisticasPrevisao estatisticas)
+        , "dificeis"       .= estatisticasDificeis estatisticas
+        , "revisoesPorDia" .= map diaQuantidade (estatisticasRevisoesPorDia estatisticas)
         ]
 
 -- | Quantos cartões de um baralho estão agendados para um dia.
 data Agendado = Agendado
-    { agDia        :: Day
-    , agBaralhoId  :: Int
-    , agBaralho    :: Text
-    , agQuantidade :: Int
+    { agendadoDia        :: Day
+    , agendadoBaralhoId  :: Int
+    , agendadoBaralho    :: Text
+    , agendadoQuantidade :: Int
     } deriving (Eq, Show)
 
--- | Um dia da agenda: o total e os baralhos que voltam nele.
+-- | Um dia da agenda: o total de cartões e os baralhos que voltam nele.
 data Proximo = Proximo
-    { pxDia        :: Day
-    , pxQuantidade :: Int
-    , pxBaralhos   :: [Agendado]
+    { proximoDia        :: Day
+    , proximoQuantidade :: Int
+    , proximoBaralhos   :: [Agendado]
     } deriving (Eq, Show)
 
 data Resumo = Resumo
-    { resRevisoesHoje :: Int
-    , resSequencia    :: Int
-    , resAtividade    :: [(Day, Int)]
-    , resProximos     :: [Proximo]
+    { resumoRevisoesHoje :: Int
+    , resumoSequencia    :: Int
+    , resumoAtividade    :: [(Day, Int)]
+    , resumoProximos     :: [Proximo]
     } deriving (Eq, Show)
 
 {- | Recebe hoje, o dia local de cada revisão da conta e os cartões agendados por dia e baralho.
-A sequência conta os dias seguidos com ao menos uma revisão; enquanto hoje não tem revisão ela
-parte de ontem, para não zerar antes de o dia acabar. A atividade vai de hoje-13 a hoje e os
-próximos de amanhã a hoje+14, os dois com zero nos dias vazios. Hoje e os atrasados ficam fora
-dos próximos: são o "para hoje". No dia, o baralho com mais cartões vem antes; empate pelo nome.
+
+A sequência conta quantos dias seguidos tiveram pelo menos uma revisão. Enquanto não houver
+revisão hoje, a contagem começa de ontem, para a sequência não zerar antes do fim do dia. A
+atividade vai de hoje-13 até hoje, e os próximos dias vão de amanhã até hoje+14, os dois com zero
+nos dias vazios. Os cartões de hoje e os atrasados não entram nos próximos dias, porque já
+aparecem como "para hoje". Dentro de cada dia, o baralho com mais cartões vem primeiro, e o
+empate é resolvido pelo nome.
 -}
 calcularResumo :: Day -> [Day] -> [Agendado] -> Resumo
 calcularResumo hoje revisoes agenda = Resumo
-    { resRevisoesHoje = length (filter (== hoje) revisoes)
-    , resSequencia    = length (takeWhile (`Set.member` dias) [addDays (negate i) inicio | i <- [0 ..]])
-    , resAtividade    = [(d, length (filter (== d) revisoes)) | d <- [addDays i hoje | i <- [-13 .. 0]]]
-    , resProximos     = map proximo [addDays i hoje | i <- [1 .. 14]]
+    { resumoRevisoesHoje = length (filter (== hoje) revisoes)
+    , resumoSequencia    = length (takeWhile (`Set.member` diasComRevisao) [addDays (negate atras) inicio | atras <- [0 ..]])
+    , resumoAtividade    = [(dia, length (filter (== dia) revisoes)) | dia <- [addDays deslocamento hoje | deslocamento <- [-13 .. 0]]]
+    , resumoProximos     = map proximo [addDays deslocamento hoje | deslocamento <- [1 .. 14]]
     }
   where
-    dias = Set.fromList revisoes
+    diasComRevisao = Set.fromList revisoes
     inicio
-        | Set.member hoje dias = hoje
-        | otherwise            = addDays (-1) hoje
-    proximo d =
-        let doDia = sortOn (\a -> (negate (agQuantidade a), agBaralho a)) [a | a <- agenda, agDia a == d]
-        in Proximo d (sum (map agQuantidade doDia)) doDia
+        | Set.member hoje diasComRevisao = hoje
+        | otherwise                      = addDays (-1) hoje
+    proximo dia =
+        let doDia = sortOn (\agendado -> (negate (agendadoQuantidade agendado), agendadoBaralho agendado))
+                           [agendado | agendado <- agenda, agendadoDia agendado == dia]
+        in Proximo dia (sum (map agendadoQuantidade doDia)) doDia
 
 instance ToJSON Resumo where
-    toJSON r = object
-        [ "revisoesHoje" .= resRevisoesHoje r
-        , "sequencia"    .= resSequencia r
-        , "atividade"    .= map diaQuantidade (resAtividade r)
-        , "proximos"     .= resProximos r
+    toJSON resumo = object
+        [ "revisoesHoje" .= resumoRevisoesHoje resumo
+        , "sequencia"    .= resumoSequencia resumo
+        , "atividade"    .= map diaQuantidade (resumoAtividade resumo)
+        , "proximos"     .= resumoProximos resumo
         ]
 
 instance ToJSON Proximo where
-    toJSON p = object
-        [ "dia"        .= pxDia p
-        , "quantidade" .= pxQuantidade p
-        , "baralhos"   .= [object ["id" .= agBaralhoId a, "nome" .= agBaralho a, "quantidade" .= agQuantidade a] | a <- pxBaralhos p]
+    toJSON diaDaAgenda = object
+        [ "dia"        .= proximoDia diaDaAgenda
+        , "quantidade" .= proximoQuantidade diaDaAgenda
+        , "baralhos"   .= [ object [ "id" .= agendadoBaralhoId agendado
+                                   , "nome" .= agendadoBaralho agendado
+                                   , "quantidade" .= agendadoQuantidade agendado ]
+                          | agendado <- proximoBaralhos diaDaAgenda ]
         ]

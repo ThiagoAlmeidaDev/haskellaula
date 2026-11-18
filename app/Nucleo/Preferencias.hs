@@ -1,8 +1,9 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Núcleo puro das preferências de estudo da conta: tamanho do texto da pergunta e da resposta,
-se a pergunta continua visível depois de revelar, como a resposta aparece, a fonte do cartão, o
-tema e se a sessão embaralha. O JSON recusa valor fora da escala com a mensagem que a API devolve.
+{- | As preferências de estudo de cada conta: o tamanho do texto da pergunta e da resposta, se a
+pergunta continua visível depois de revelar, como a resposta aparece, a fonte do cartão, o tema
+e se a sessão embaralha os cartões. Valores fora da escala são recusados já na leitura do JSON,
+com a mensagem que a API devolve.
 -}
 module Nucleo.Preferencias
     ( Preferencias (..)
@@ -32,7 +33,7 @@ data Fonte = SemSerifa | Serifa | Manuscrita deriving (Eq, Show, Enum, Bounded)
 
 data Tema = Claro | Escuro | Sistema deriving (Eq, Show, Enum, Bounded)
 
--- | Os tamanhos vão de 1 a 8; o frontend traduz cada passo em pixels.
+-- | Os tamanhos vão de 1 a 8, e o frontend converte cada passo em pixels.
 data Preferencias = Preferencias
     { tamanhoPergunta :: Int
     , tamanhoResposta :: Int
@@ -60,9 +61,9 @@ temaTexto Claro   = "claro"
 temaTexto Escuro  = "escuro"
 temaTexto Sistema = "sistema"
 
--- O inverso de cada *Texto, usado pelo JSON e pela leitura do banco.
+-- Faz o caminho inverso das funções *Texto. É usado na leitura do JSON e do banco.
 lerPor :: (Enum a, Bounded a) => (a -> Text) -> Text -> Maybe a
-lerPor nomeDe t = lookup t [(nomeDe v, v) | v <- [minBound .. maxBound]]
+lerPor nomeDe textoLido = lookup textoLido [(nomeDe opcaoPossivel, opcaoPossivel) | opcaoPossivel <- [minBound .. maxBound]]
 
 lerRevelar :: Text -> Maybe Revelar
 lerRevelar = lerPor revelarTexto
@@ -74,44 +75,44 @@ lerTema :: Text -> Maybe Tema
 lerTema = lerPor temaTexto
 
 instance ToJSON Preferencias where
-    toJSON p = object
-        [ "tamanhoPergunta" .= tamanhoPergunta p
-        , "tamanhoResposta" .= tamanhoResposta p
-        , "mostrarPergunta" .= mostrarPergunta p
-        , "revelar"         .= revelarTexto (revelar p)
-        , "fonte"           .= fonteTexto (fonte p)
-        , "tema"            .= temaTexto (tema p)
-        , "embaralhar"      .= embaralhar p
+    toJSON prefs = object
+        [ "tamanhoPergunta" .= tamanhoPergunta prefs
+        , "tamanhoResposta" .= tamanhoResposta prefs
+        , "mostrarPergunta" .= mostrarPergunta prefs
+        , "revelar"         .= revelarTexto (revelar prefs)
+        , "fonte"           .= fonteTexto (fonte prefs)
+        , "tema"            .= temaTexto (tema prefs)
+        , "embaralhar"      .= embaralhar prefs
         ]
 
 tamanho :: Key -> Object -> Parser Int
-tamanho chave o = do
-    v <- o .:? chave
-    case v of
-        Just (Number n) | Just i <- toBoundedInteger n, i >= 1, i <= 8 -> pure i
+tamanho chave objeto = do
+    valor <- objeto .:? chave
+    case valor of
+        Just (Number numero) | Just inteiro <- toBoundedInteger numero, inteiro >= 1, inteiro <= 8 -> pure inteiro
         _ -> fail "o tamanho do texto deve estar entre 1 e 8"
 
 booleano :: Key -> Text -> Object -> Parser Bool
-booleano chave erro o = do
-    v <- o .:? chave
-    case v of
-        Just (Bool b) -> pure b
-        _             -> fail (T.unpack erro)
+booleano chave erro objeto = do
+    valor <- objeto .:? chave
+    case valor of
+        Just (Bool lido) -> pure lido
+        _                -> fail (T.unpack erro)
 
 opcao :: (Text -> Maybe a) -> Key -> Text -> Object -> Parser a
-opcao ler chave erro o = do
-    v <- o .:? chave
-    case v of
-        Just (String t) | Just x <- ler t -> pure x
-        _                                 -> fail (T.unpack erro)
+opcao ler chave erro objeto = do
+    valor <- objeto .:? chave
+    case valor of
+        Just (String conteudo) | Just lido <- ler conteudo -> pure lido
+        _                                               -> fail (T.unpack erro)
 
--- O corpo do PUT traz as preferências inteiras; campo ausente é recusado como inválido.
+-- O PUT manda todas as preferências de uma vez, e um campo que faltar é recusado como inválido.
 instance FromJSON Preferencias where
-    parseJSON = corpo $ \o -> Preferencias
-        <$> tamanho "tamanhoPergunta" o
-        <*> tamanho "tamanhoResposta" o
-        <*> booleano "mostrarPergunta" "mostrarPergunta deve ser verdadeiro ou falso" o
-        <*> opcao lerRevelar "revelar" "revelar deve ser virar ou abaixo" o
-        <*> opcao lerFonte "fonte" "fonte inválida" o
-        <*> opcao lerTema "tema" "tema inválido" o
-        <*> booleano "embaralhar" "embaralhar deve ser verdadeiro ou falso" o
+    parseJSON = corpo $ \objeto -> Preferencias
+        <$> tamanho "tamanhoPergunta" objeto
+        <*> tamanho "tamanhoResposta" objeto
+        <*> booleano "mostrarPergunta" "mostrarPergunta deve ser verdadeiro ou falso" objeto
+        <*> opcao lerRevelar "revelar" "revelar deve ser virar ou abaixo" objeto
+        <*> opcao lerFonte "fonte" "fonte inválida" objeto
+        <*> opcao lerTema "tema" "tema inválido" objeto
+        <*> booleano "embaralhar" "embaralhar deve ser verdadeiro ou falso" objeto

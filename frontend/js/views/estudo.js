@@ -1,7 +1,8 @@
-/* Estudar: a escolha (tudo ou um baralho) e a sessão. Na sessão, Espaço mostra a resposta,
-   1 a 4 respondem (notas 1, 3, 4 e 5 do SM-2), S pula sem mexer no agendamento, E edita e
-   + e - mudam o tamanho do texto. A carta segue as preferências da conta; falha ao responder
-   não avança a fila. No fim, os errados podem ser revistos em treino, sem nota. */
+/* Telas de estudo. Uma para escolher o que estudar (tudo ou um baralho) e outra para a sessão.
+   Na sessão, Espaço mostra a resposta, 1 a 4 respondem (notas 1, 3, 4 e 5 do SM-2), S pula sem
+   mexer no agendamento, E edita o cartão e + e - mudam o tamanho do texto. A carta usa as
+   preferências da conta. Se der erro ao responder, a fila não avança. No fim, dá para rever os
+   cartões errados num treino sem nota. */
 import { baralhos as apiBaralhos, cartoes as apiCartoes } from '../api.js';
 import { h, icone, kbd, plural, prazo, toast, digitando, formatarNumero, diasAte } from '../dom.js';
 import { abrirGaveta, fecharGaveta } from '../gaveta.js';
@@ -28,9 +29,9 @@ export async function renderEscolhaEstudo(main, _params, { signal }) {
     if (!abortado(erro)) estadoErro(main, erro);
     return;
   }
-  const comPendencia = lista.filter((b) => b.paraHoje > 0).sort((a, b) => b.paraHoje - a.paraHoje);
-  const emDia = lista.filter((b) => b.paraHoje === 0);
-  const total = comPendencia.reduce((s, b) => s + b.paraHoje, 0);
+  const comPendencia = lista.filter((baralho) => baralho.paraHoje > 0).sort((primeiro, segundo) => segundo.paraHoje - primeiro.paraHoje);
+  const emDia = lista.filter((baralho) => baralho.paraHoje === 0);
+  const total = comPendencia.reduce((soma, baralho) => soma + baralho.paraHoje, 0);
 
   const blocoTudo = h('section', { class: 'escolha-tudo ficha', 'aria-labelledby': 'escolha-tudo-titulo' },
     h('p', { class: 'eyebrow', id: 'escolha-tudo-titulo' }, 'Estudar tudo'),
@@ -45,13 +46,13 @@ export async function renderEscolhaEstudo(main, _params, { signal }) {
   const blocoLista = h('section', { 'aria-labelledby': 'escolha-baralhos' },
     h('div', { class: 'secao-cabeca' }, h('h2', { class: 'secao-titulo', id: 'escolha-baralhos' }, 'Ou um baralho de cada vez')),
     comPendencia.length
-      ? h('ul', { class: 'lista ficha' }, comPendencia.map((b) => h('li', { class: 'linha-baralho linha-escolha' },
-        h('div', {}, h('a', { class: 'lb-nome', href: `#/estudar/${b.id}` }, b.nome), h('div', { style: 'margin-top: 8px; max-width: 280px' }, barraDominio(b.etapas))),
-        h('span', { class: 'pendencia' }, `${b.paraHoje} para hoje`),
-        h('a', { class: 'btn btn-sec btn-sm', href: `#/estudar/${b.id}` }, 'Estudar'))))
+      ? h('ul', { class: 'lista ficha' }, comPendencia.map((baralho) => h('li', { class: 'linha-baralho linha-escolha' },
+        h('div', {}, h('a', { class: 'lb-nome', href: `#/estudar/${baralho.id}` }, baralho.nome), h('div', { style: 'margin-top: 8px; max-width: 280px' }, barraDominio(baralho.etapas))),
+        h('span', { class: 'pendencia' }, `${baralho.paraHoje} para hoje`),
+        h('a', { class: 'btn btn-sec btn-sm', href: `#/estudar/${baralho.id}` }, 'Estudar'))))
       : h('p', { class: 'vazio-inline' }, lista.length ? 'Todos os baralhos estão em dia.' : 'Você ainda não tem baralhos.'),
     emDia.length && comPendencia.length
-      ? h('p', { class: 'vazio-inline', style: 'margin-top: 16px' }, `Em dia: ${emDia.map((b) => b.nome).join(', ')}.`)
+      ? h('p', { class: 'vazio-inline', style: 'margin-top: 16px' }, `Em dia: ${emDia.map((baralho) => baralho.nome).join(', ')}.`)
       : null);
 
   main.replaceChildren(h('div', { class: 'pagina' },
@@ -78,9 +79,9 @@ export async function renderEstudo(main, { id }, { signal }) {
     if (!abortado(erro)) estadoErro(main, erro);
     return;
   }
-  const nomes = new Map(baralhos.map((b) => [b.id, b.nome]));
-  const porId = new Map(baralhos.map((b) => [b.id, b]));
-  const atual = todos ? null : baralhos.find((b) => b.id === id);
+  const nomes = new Map(baralhos.map((baralho) => [baralho.id, baralho.nome]));
+  const porId = new Map(baralhos.map((baralho) => [baralho.id, baralho]));
+  const atual = todos ? null : baralhos.find((baralho) => baralho.id === id);
   if (!todos && !atual) {
     estadoErro(main, Object.assign(new Error('baralho não encontrado'), { status: 404 }));
     return;
@@ -90,15 +91,15 @@ export async function renderEstudo(main, { id }, { signal }) {
   const saida = todos ? '#/estudar' : `#/baralho/${id}`;
 
   const seletor = h('select', { class: 'input estudo-seletor', 'aria-label': 'Trocar de baralho' },
-    h('option', { value: 'todos' }, `Todos os baralhos (${baralhos.reduce((s, b) => s + b.paraHoje, 0)})`),
-    baralhos.map((b) => h('option', { value: String(b.id) }, `${b.nome} (${b.paraHoje})`)));
+    h('option', { value: 'todos' }, `Todos os baralhos (${baralhos.reduce((soma, baralho) => soma + baralho.paraHoje, 0)})`),
+    baralhos.map((baralho) => h('option', { value: String(baralho.id) }, `${baralho.nome} (${baralho.paraHoje})`)));
   seletor.value = todos ? 'todos' : String(id);
   seletor.addEventListener('change', () => {
     location.hash = seletor.value === 'todos' ? '#/estudar/todos' : `#/estudar/${seletor.value}`;
   });
 
   if (fila.length === 0) {
-    const proximo = baralhos.find((b) => b.paraHoje > 0 && b.id !== id);
+    const proximo = baralhos.find((baralho) => baralho.paraHoje > 0 && baralho.id !== id);
     main.replaceChildren(h('div', { class: 'estudo' },
       h('div', { class: 'estudo-topo' }, voltar(saida, 'Sair'), seletor),
       h('section', { class: 'estado estado-pagina' },
@@ -110,8 +111,9 @@ export async function renderEstudo(main, { id }, { signal }) {
     return () => { document.title = 'Recall'; };
   }
 
-  /* itens guardam o estado de cada cartão na ordem original (para o trilho); ordem é a fila viva. */
-  const itens = fila.map((c) => ({ cartao: c, estado: 'pendente' }));
+  /* itens guarda o estado de cada cartão na ordem original, que é a usada no trilho. ordem é a
+     fila atual, com os índices dos cartões que ainda faltam. */
+  const itens = fila.map((cartao) => ({ cartao, estado: 'pendente' }));
   let ordem = itens.map((_, i) => i);
   let prefs = { ...preferenciasAtuais() };
   if (prefs.embaralhar) {
@@ -123,8 +125,8 @@ export async function renderEstudo(main, { id }, { signal }) {
   let carta = null;
   let espera = null;
 
-  /* A mudança aparece na hora; a gravação espera a pessoa parar de ajustar. Erro ao gravar
-     avisa, e a carta continua como ela deixou até a próxima tentativa. */
+  /* A mudança aparece na carta na hora, mas só é salva quando a pessoa para de ajustar. Se der
+     erro ao salvar, mostra um aviso e a carta fica como a pessoa deixou até a próxima tentativa. */
   function ajustar(mudanca) {
     prefs = { ...prefs, ...mudanca };
     carta?.aplicar(prefs);
@@ -134,8 +136,8 @@ export async function renderEstudo(main, { id }, { signal }) {
       salvarPreferencias(prefs).catch((erro) => toast(erro.message));
     }, 600);
   }
-  const limitar = (v, d) => Math.min(TAMANHO_MAXIMO, Math.max(1, v + d));
-  const mudarTamanho = (d) => ajustar({ tamanhoPergunta: limitar(prefs.tamanhoPergunta, d), tamanhoResposta: limitar(prefs.tamanhoResposta, d) });
+  const limitar = (valor, delta) => Math.min(TAMANHO_MAXIMO, Math.max(1, valor + delta));
+  const mudarTamanho = (delta) => ajustar({ tamanhoPergunta: limitar(prefs.tamanhoPergunta, delta), tamanhoResposta: limitar(prefs.tamanhoResposta, delta) });
   const olho = h('button', {
     class: 'btn-icone', type: 'button', title: 'Manter a pergunta na carta depois de revelar', 'aria-label': 'Manter a pergunta na carta depois de revelar',
     'aria-pressed': String(prefs.mostrarPergunta), onclick: () => ajustar({ mostrarPergunta: !prefs.mostrarPergunta }),
@@ -146,7 +148,8 @@ export async function renderEstudo(main, { id }, { signal }) {
     olho,
     h('button', { class: 'btn-icone', type: 'button', title: 'Ajustes da carta', 'aria-haspopup': 'dialog', onclick: () => abrirAjustes() }, icone('ajustes'), 'Ajustes'));
 
-  /* Os ajustes abrem na gaveta, por cima da sessão: fechar volta para a mesma carta, no mesmo ponto. */
+  /* Os ajustes abrem na gaveta por cima da sessão, então ao fechar a pessoa volta para a mesma
+     carta, do jeito que estava. */
   function abrirAjustes() {
     const fontes = [
       { valor: 'sem-serifa', nome: 'Sem serifa' },
@@ -156,14 +159,14 @@ export async function renderEstudo(main, { id }, { signal }) {
     abrirGaveta({
       titulo: 'Ajustes da carta',
       corpo: [
-        faixaTamanho({ rotulo: 'Tamanho da pergunta', valor: prefs.tamanhoPergunta, aoMudar: (v) => ajustar({ tamanhoPergunta: v }) }).el,
-        faixaTamanho({ rotulo: 'Tamanho da resposta', valor: prefs.tamanhoResposta, aoMudar: (v) => ajustar({ tamanhoResposta: v }) }).el,
-        seletorOpcoes({ legenda: 'Fonte da carta', nome: 'fonte-sessao', valor: prefs.fonte, itens: fontes, aoMudar: (v) => ajustar({ fonte: v }) }).el,
+        faixaTamanho({ rotulo: 'Tamanho da pergunta', valor: prefs.tamanhoPergunta, aoMudar: (valor) => ajustar({ tamanhoPergunta: valor }) }).el,
+        faixaTamanho({ rotulo: 'Tamanho da resposta', valor: prefs.tamanhoResposta, aoMudar: (valor) => ajustar({ tamanhoResposta: valor }) }).el,
+        seletorOpcoes({ legenda: 'Fonte da carta', nome: 'fonte-sessao', valor: prefs.fonte, itens: fontes, aoMudar: (valor) => ajustar({ fonte: valor }) }).el,
         seletorOpcoes({
-          legenda: 'Ao mostrar a resposta', nome: 'revelar-sessao', valor: prefs.revelar, aoMudar: (v) => ajustar({ revelar: v }),
+          legenda: 'Ao mostrar a resposta', nome: 'revelar-sessao', valor: prefs.revelar, aoMudar: (valor) => ajustar({ revelar: valor }),
           itens: [{ valor: 'virar', nome: 'Virar a carta' }, { valor: 'abaixo', nome: 'Mostrar embaixo' }],
         }).el,
-        chave({ rotulo: 'Manter a pergunta depois de revelar', valor: prefs.mostrarPergunta, aoMudar: (v) => ajustar({ mostrarPergunta: v }) }).el,
+        chave({ rotulo: 'Manter a pergunta depois de revelar', valor: prefs.mostrarPergunta, aoMudar: (valor) => ajustar({ mostrarPergunta: valor }) }).el,
         h('p', { class: 'campo-ajuda' }, 'As mudanças aparecem na carta na hora e ficam salvas na sua conta.'),
       ],
       rodape: [h('button', { class: 'btn btn-pri', type: 'button', onclick: fecharGaveta }, 'Voltar à sessão')],
@@ -179,9 +182,9 @@ export async function renderEstudo(main, { id }, { signal }) {
   const palco = h('div');
   const acoes = h('div', { class: 'estudo-acoes' });
   const retorno = h('p', { class: 'estudo-retorno', 'aria-live': 'polite' });
-  const botoes = RESPOSTAS.map((r) => h('button', {
-    class: r.classe, type: 'button', 'aria-keyshortcuts': r.tecla, onclick: () => responder(r.nota),
-  }, h('span', { class: 'resposta-rotulo' }, r.rotulo), h('span', { class: 'resposta-prazo' }), kbd(r.tecla)));
+  const botoes = RESPOSTAS.map((resposta) => h('button', {
+    class: resposta.classe, type: 'button', 'aria-keyshortcuts': resposta.tecla, onclick: () => responder(resposta.nota),
+  }, h('span', { class: 'resposta-rotulo' }, resposta.rotulo), h('span', { class: 'resposta-prazo' }), kbd(resposta.tecla)));
   const mostrar = h('div', { class: 'mostrar' },
     h('button', { class: 'btn btn-pri btn-alto', type: 'button', onclick: revelar }, 'Mostrar resposta', kbd('Espaço')),
     h('span', { class: 'dica-toque' }, 'Toque para ver a resposta'));
@@ -190,21 +193,21 @@ export async function renderEstudo(main, { id }, { signal }) {
   const corrente = () => itens[ordem[0]];
 
   function desenharProgresso() {
-    const respondidos = itens.filter((i) => i.estado === 'certo' || i.estado === 'errado').length;
+    const respondidos = itens.filter((item) => item.estado === 'certo' || item.estado === 'errado').length;
     progresso.replaceChildren(`Cartão `, h('strong', {}, formatarNumero(Math.min(respondidos + 1, itens.length))), ` de ${formatarNumero(itens.length)}`);
     trilho.style.gap = itens.length > 40 ? '0' : '';
-    trilho.replaceChildren(...itens.map((i, idx) => h('span', {
-      class: idx === ordem[0] && !terminado ? 't-atual' : i.estado === 'certo' ? 't-certo' : i.estado === 'errado' ? 't-errado' : i.estado === 'pulado' ? 't-pulado' : '',
+    trilho.replaceChildren(...itens.map((item, indice) => h('span', {
+      class: indice === ordem[0] && !terminado ? 't-atual' : item.estado === 'certo' ? 't-certo' : item.estado === 'errado' ? 't-errado' : item.estado === 'pulado' ? 't-pulado' : '',
     })));
   }
 
   function desenharCartao() {
     const { cartao } = corrente();
     mostrando = false;
-    const b = porId.get(cartao.baralhoId);
+    const baralho = porId.get(cartao.baralhoId);
     carta = cartaEstudo({
-      pergunta: cartao.frente, resposta: cartao.verso, rotuloEsq: b?.nome ?? '', rotuloDir: NOMES_ETAPA[cartao.etapa] ?? '',
-      cor: b?.cor, padrao: b?.padrao, prefs,
+      pergunta: cartao.frente, resposta: cartao.verso, rotuloEsq: baralho?.nome ?? '', rotuloDir: NOMES_ETAPA[cartao.etapa] ?? '',
+      cor: baralho?.cor, padrao: baralho?.padrao, prefs,
     });
     carta.carta.classList.add('entrando');
     carta.el.addEventListener('click', () => { if (!mostrando) revelar(); });
@@ -219,13 +222,14 @@ export async function renderEstudo(main, { id }, { signal }) {
     mostrando = true;
     const { cartao } = corrente();
     carta.revelar();
-    const dias = new Map((cartao.previsoes ?? []).map((p) => [p.nota, p.dias]));
-    RESPOSTAS.forEach((r, i) => {
-      botoes[i].querySelector('.resposta-prazo').textContent = dias.has(r.nota) ? prazo(dias.get(r.nota)) : '';
+    const dias = new Map((cartao.previsoes ?? []).map((previsao) => [previsao.nota, previsao.dias]));
+    RESPOSTAS.forEach((resposta, i) => {
+      botoes[i].querySelector('.resposta-prazo').textContent = dias.has(resposta.nota) ? prazo(dias.get(resposta.nota)) : '';
     });
-    /* Num cartão novo toda resposta volta amanhã; a diferença está na facilidade, que muda os
-       próximos intervalos. Sem esta nota, os quatro "amanhã" parecem dizer que tanto faz. */
-    const prazos = new Set(RESPOSTAS.map((r) => dias.get(r.nota)));
+    /* Num cartão novo, qualquer resposta faz ele voltar amanhã. O que muda é a facilidade, que
+       afeta os intervalos seguintes. A nota aparece para a pessoa não achar que tanto faz a
+       resposta só porque os quatro botões dizem "amanhã". */
+    const prazos = new Set(RESPOSTAS.map((resposta) => dias.get(resposta.nota)));
     retorno.textContent = '';
     acoes.replaceChildren(
       prazos.size === 1 ? h('p', { class: 'estudo-nota' }, 'Primeira revisão: qualquer resposta volta amanhã. O que muda são os intervalos seguintes.') : '',
@@ -240,9 +244,9 @@ export async function renderEstudo(main, { id }, { signal }) {
 
   function pular() {
     if (enviando || terminado || ordem.length === 0) return;
-    const idx = ordem.shift();
-    if (itens[idx].estado === 'pendente') itens[idx].estado = 'pulado';
-    ordem.push(idx);
+    const indice = ordem.shift();
+    if (itens[indice].estado === 'pendente') itens[indice].estado = 'pulado';
+    ordem.push(indice);
     retorno.textContent = ordem.length === 1 ? 'Este é o último cartão da fila.' : 'Pulado: volta no fim da fila.';
     desenharCartao();
   }
@@ -250,7 +254,7 @@ export async function renderEstudo(main, { id }, { signal }) {
   async function responder(nota) {
     if (!mostrando || enviando || terminado) return;
     enviando = true;
-    for (const b of botoes) b.disabled = true;
+    for (const botao of botoes) botao.disabled = true;
     const item = corrente();
     try {
       const atualizado = await apiCartoes.responder(item.cartao.id, nota);
@@ -264,7 +268,7 @@ export async function renderEstudo(main, { id }, { signal }) {
       toast(erro.message);
     } finally {
       enviando = false;
-      for (const b of botoes) b.disabled = false;
+      for (const botao of botoes) botao.disabled = false;
     }
   }
 
@@ -310,10 +314,10 @@ export async function renderEstudo(main, { id }, { signal }) {
   function concluir() {
     terminado = true;
     treinoAtivo = null;
-    const certos = itens.filter((i) => i.estado === 'certo').length;
-    const errados = itens.filter((i) => i.estado === 'errado');
+    const certos = itens.filter((item) => item.estado === 'certo').length;
+    const errados = itens.filter((item) => item.estado === 'errado');
     const taxa = Math.round((certos / itens.length) * 100);
-    const proximo = baralhos.find((b) => b.paraHoje > 0 && (todos ? false : b.id !== id));
+    const proximo = baralhos.find((baralho) => baralho.paraHoje > 0 && (todos ? false : baralho.id !== id));
     main.replaceChildren(h('section', { class: 'conclusao' },
       h('p', { class: 'eyebrow' }, nomeSessao),
       h('h1', { class: 'titulo', tabindex: '-1' }, 'Sessão concluída'),
@@ -324,7 +328,7 @@ export async function renderEstudo(main, { id }, { signal }) {
         tile(`${taxa}%`, 'Taxa de acerto')),
       h('div', { class: 'estado-acoes' },
         errados.length
-          ? h('button', { class: 'btn btn-pri', type: 'button', onclick: () => treino(errados.map((i) => i.cartao)) }, `Rever os que errei (${errados.length})`)
+          ? h('button', { class: 'btn btn-pri', type: 'button', onclick: () => treino(errados.map((item) => item.cartao)) }, `Rever os que errei (${errados.length})`)
           : null,
         proximo
           ? h('a', { class: errados.length ? 'btn btn-sec' : 'btn btn-pri', href: `#/estudar/${proximo.id}` }, `Próximo: ${proximo.nome}`, h('span', { class: 'btn-contagem' }, String(proximo.paraHoje)))
@@ -333,7 +337,8 @@ export async function renderEstudo(main, { id }, { signal }) {
     main.querySelector('h1').focus({ preventScroll: true });
   }
 
-  /* Treino: mostra os errados de novo, sem nota e sem chamar a API; o agendamento já foi gravado. */
+  /* O treino mostra os cartões errados de novo, sem nota e sem chamar a API, porque o agendamento
+     deles já foi gravado. */
   function treino(lista) {
     let i = 0;
     let visto = false;
@@ -342,11 +347,11 @@ export async function renderEstudo(main, { id }, { signal }) {
     const botao = h('button', { class: 'btn btn-pri btn-alto', type: 'button' });
     const contador = h('p', { class: 'estudo-progresso' });
     function desenhar() {
-      const c = lista[i];
+      const cartao = lista[i];
       visto = false;
       contador.replaceChildren(h('strong', {}, String(i + 1)), ` de ${lista.length}, treino sem nota`);
-      const b = porId.get(c.baralhoId);
-      cartaTreino = cartaEstudo({ pergunta: c.frente, resposta: c.verso, rotuloEsq: 'Treino', rotuloDir: b?.nome ?? '', cor: b?.cor, padrao: b?.padrao, prefs });
+      const baralho = porId.get(cartao.baralhoId);
+      cartaTreino = cartaEstudo({ pergunta: cartao.frente, resposta: cartao.verso, rotuloEsq: 'Treino', rotuloDir: baralho?.nome ?? '', cor: baralho?.cor, padrao: baralho?.padrao, prefs });
       ficha.replaceChildren(cartaTreino.el);
       botao.replaceChildren('Mostrar resposta', kbd('Espaço'));
       botao.focus({ preventScroll: true });
@@ -373,42 +378,42 @@ export async function renderEstudo(main, { id }, { signal }) {
 
   /* O atalho é global para funcionar sem foco no cartão, então ignora teclas digitadas em campos,
      combinações com modificador (Ctrl K abre a busca) e qualquer tecla com um diálogo aberto. */
-  function aoTeclar(e) {
-    if (e.repeat || e.ctrlKey || e.metaKey || e.altKey) return;
-    if (digitando(e) || document.querySelector('dialog[open]')) return;
+  function aoTeclar(evento) {
+    if (evento.repeat || evento.ctrlKey || evento.metaKey || evento.altKey) return;
+    if (digitando(evento) || document.querySelector('dialog[open]')) return;
     if (treinoAtivo && terminado) {
-      if (e.key === ' ') { e.preventDefault(); treinoAtivo(); }
+      if (evento.key === ' ') { evento.preventDefault(); treinoAtivo(); }
       return;
     }
     if (terminado) return;
-    const tecla = e.key.toLowerCase();
-    if (e.key === ' ') {
-      e.preventDefault();
+    const tecla = evento.key.toLowerCase();
+    if (evento.key === ' ') {
+      evento.preventDefault();
       if (!mostrando) revelar();
       else responder(4);
-    } else if (/^[1-4]$/.test(e.key) && mostrando) {
-      e.preventDefault();
-      responder(RESPOSTAS[Number(e.key) - 1].nota);
+    } else if (/^[1-4]$/.test(evento.key) && mostrando) {
+      evento.preventDefault();
+      responder(RESPOSTAS[Number(evento.key) - 1].nota);
     } else if (tecla === 's') {
-      e.preventDefault();
+      evento.preventDefault();
       pular();
     } else if (tecla === 'e') {
-      e.preventDefault();
+      evento.preventDefault();
       editar();
-    } else if (e.key === '+' || e.key === '=') {
-      e.preventDefault();
+    } else if (evento.key === '+' || evento.key === '=') {
+      evento.preventDefault();
       mudarTamanho(1);
-    } else if (e.key === '-') {
-      e.preventDefault();
+    } else if (evento.key === '-') {
+      evento.preventDefault();
       mudarTamanho(-1);
-    } else if (e.key === 'Escape') {
+    } else if (evento.key === 'Escape') {
       location.hash = saida;
     }
   }
 
   // Sem isto, Espaço com foco num botão também dispararia o clique dele ao soltar a tecla.
-  function aoSoltar(e) {
-    if (e.key === ' ' && !digitando(e) && main.contains(e.target)) e.preventDefault();
+  function aoSoltar(evento) {
+    if (evento.key === ' ' && !digitando(evento) && main.contains(evento.target)) evento.preventDefault();
   }
 
   main.replaceChildren(h('div', { class: 'estudo' },

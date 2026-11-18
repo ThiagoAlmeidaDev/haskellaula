@@ -1,7 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Consultas de usuários e sessões. Recebe a senha já em hash e o token já em SHA-256: este
-módulo nunca vê segredo em claro. Expiração compara instantes (TIMESTAMPTZ), não dias.
+{- | Consultas de usuários e sessões. A senha já chega aqui em hash e o token já chega em SHA-256,
+então este módulo nunca lida com o valor original de nenhum dos dois. A expiração da sessão
+compara instantes (TIMESTAMPTZ), e não dias.
 -}
 module Banco.Contas
     ( criarConta
@@ -17,10 +18,10 @@ import Database.PostgreSQL.Simple
 import Nucleo.Conta (Usuario (..))
 
 paraUsuario :: (Int, Text, Text) -> Usuario
-paraUsuario (i, n, e) = Usuario i n e
+paraUsuario (idUsuario, nome, email) = Usuario idUsuario nome email
 
-{- | Nothing quando o e-mail já tem conta. O ON CONFLICT resolve dois cadastros simultâneos
-sem exceção.
+{- | Devolve Nothing quando já existe uma conta com o e-mail. O ON CONFLICT cobre também dois
+cadastros com o mesmo e-mail chegando ao mesmo tempo, sem gerar exceção.
 -}
 criarConta :: Connection -> Text -> Text -> Text -> IO (Maybe Usuario)
 criarConta conn nome email senhaHash = do
@@ -32,21 +33,21 @@ criarConta conn nome email senhaHash = do
         [linha] -> Just (paraUsuario linha)
         _       -> Nothing)
 
--- O usuário e o hash da senha, para o login conferir fora do banco.
+-- Devolve o usuário e o hash da senha, para o login conferir a senha fora do banco.
 buscarParaLogin :: Connection -> Text -> IO (Maybe (Usuario, Text))
 buscarParaLogin conn email = do
     linhas <- query conn "SELECT id, nome, email, senha_hash FROM usuarios WHERE email = ?" (Only email)
     pure (case linhas of
-        [(i, n, e, h)] -> Just (Usuario i n e, h)
-        _              -> Nothing)
+        [(idUsuario, nome, emailSalvo, senhaHash)] -> Just (Usuario idUsuario nome emailSalvo, senhaHash)
+        _                                          -> Nothing)
 
--- Trinta dias de validade. As sessões vencidas da conta saem no mesmo comando.
+-- A sessão vale por 30 dias. O mesmo comando aproveita para apagar as sessões vencidas da conta.
 criarSessao :: Connection -> Int -> Text -> IO ()
-criarSessao conn uid tokenHash = do
+criarSessao conn idUsuario tokenHash = do
     _ <- execute conn
         "WITH limpeza AS (DELETE FROM sessoes WHERE usuario_id = ? AND expira_em <= now()) \
         \INSERT INTO sessoes (token_hash, usuario_id, expira_em) VALUES (?, ?, now() + interval '30 days')"
-        (uid, tokenHash, uid)
+        (idUsuario, tokenHash, idUsuario)
     pure ()
 
 usuarioDaSessao :: Connection -> Text -> IO (Maybe Usuario)

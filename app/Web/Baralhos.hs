@@ -1,8 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-{- | Handlers das rotas da conta: resumo, baralhos, cartões, revisão e estatísticas. A ordem em
-cada um é autenticar (401), validar o corpo (400), buscar o que precisa existir (404), aplicar a
-regra pura e persistir. O id de outra conta responde 404, igual a um id inexistente.
+{- | Handlers das rotas da conta: resumo, baralhos, cartões, revisão e estatísticas. Todos seguem a
+mesma ordem: autenticar (401), validar o corpo (400), buscar o que precisa existir (404), aplicar
+a regra do Nucleo e gravar. Um id de outra conta responde 404, igual a um id que não existe.
 -}
 module Web.Baralhos
     ( rotasDaConta
@@ -28,7 +28,11 @@ semBaralho, semCartao :: Text
 semBaralho = "baralho não encontrado"
 semCartao  = "cartão não encontrado"
 
--- A conta vem como ação: cada handler a roda primeiro, e sem sessão nada mais acontece.
+{- A conta chega como uma ação (Handler Usuario), e não como um valor já pronto. Cada handler
+executa essa ação primeiro, e sem uma sessão válida ela já responde 401 e nada mais roda.
+
+A ordem dos handlers abaixo precisa ser a mesma das rotas em RotasDaConta (Web/Api.hs).
+-}
 rotasDaConta :: Pool Connection -> Handler Usuario -> Server RotasDaConta
 rotasDaConta pool conta =
          resumo
@@ -37,103 +41,105 @@ rotasDaConta pool conta =
     :<|> listar
     :<|> criar
     :<|> buscar
-    :<|> editarB
-    :<|> excluir
+    :<|> editarBaralhoDaConta
+    :<|> excluirBaralhoDaConta
     :<|> cartoes
     :<|> novoCartao
     :<|> revisar
     :<|> revisarTudo
     :<|> estatisticas
-    :<|> editar
-    :<|> excluirC
+    :<|> editarCartaoDaConta
+    :<|> excluirCartaoDaConta
     :<|> responderCartao
   where
-    uid = usuarioId <$> conta
+    idDoUsuario = usuarioId <$> conta
 
     resumo = do
-        u <- uid
+        idUsuario <- idDoUsuario
         banco pool $ \conn -> do
-            d <- hoje
+            dia <- hoje
             tz <- getCurrentTimeZone
-            calcularResumo d <$> diasDeRevisao conn tz u <*> agendaDaConta conn u d
+            calcularResumo dia <$> diasDeRevisao conn tz idUsuario <*> agendaDaConta conn idUsuario dia
 
-    preferencias = uid >>= \u -> banco pool (\conn -> buscarPreferencias conn u)
+    preferencias = idDoUsuario >>= \idUsuario -> banco pool (\conn -> buscarPreferencias conn idUsuario)
 
-    -- O FromJSON de Preferencias já recusou valor fora da escala com 400 antes de chegar aqui.
-    salvarPrefs prefs = uid >>= \u -> banco pool (\conn -> salvarPreferencias conn u prefs)
+    -- Valores fora da escala já foram recusados com 400 pelo FromJSON de Preferencias antes de chegar aqui.
+    salvarPrefs prefs = idDoUsuario >>= \idUsuario -> banco pool (\conn -> salvarPreferencias conn idUsuario prefs)
 
     listar = do
-        u <- uid
-        banco pool (\conn -> hoje >>= listarBaralhos conn u)
+        idUsuario <- idDoUsuario
+        banco pool (\conn -> hoje >>= listarBaralhos conn idUsuario)
 
     criar dados = do
-        u <- uid
-        nb <- validar (validarNovoBaralho dados)
-        banco pool (\conn -> criarBaralho conn u nb)
+        idUsuario <- idDoUsuario
+        novoBaralho <- validar (validarNovoBaralho dados)
+        banco pool (\conn -> criarBaralho conn idUsuario novoBaralho)
 
-    buscarDa u bid = banco pool (\conn -> hoje >>= \d -> buscarBaralho conn u d bid) >>= encontrado semBaralho
+    buscarDoUsuario idUsuario idBaralho =
+        banco pool (\conn -> hoje >>= \dia -> buscarBaralho conn idUsuario dia idBaralho) >>= encontrado semBaralho
 
-    buscar bid = uid >>= \u -> buscarDa u bid
+    buscar idBaralho = idDoUsuario >>= \idUsuario -> buscarDoUsuario idUsuario idBaralho
 
-    editarB bid dados = do
-        u <- uid
-        nb <- validar (validarNovoBaralho dados)
-        banco pool (\conn -> hoje >>= \d -> editarBaralho conn u d bid nb) >>= encontrado semBaralho
+    editarBaralhoDaConta idBaralho dados = do
+        idUsuario <- idDoUsuario
+        baralhoEditado <- validar (validarNovoBaralho dados)
+        banco pool (\conn -> hoje >>= \dia -> editarBaralho conn idUsuario dia idBaralho baralhoEditado) >>= encontrado semBaralho
 
-    excluir bid = do
-        u <- uid
-        banco pool (\conn -> excluirBaralho conn u bid) >>= excluido semBaralho
+    excluirBaralhoDaConta idBaralho = do
+        idUsuario <- idDoUsuario
+        banco pool (\conn -> excluirBaralho conn idUsuario idBaralho) >>= excluido semBaralho
 
-    -- As rotas por baralho conferem o dono aqui; as consultas seguintes filtram só pelo id.
-    exigirBaralho bid = uid >>= \u -> buscarDa u bid >> pure ()
+    -- As rotas de um baralho conferem aqui se ele é da conta. Depois disso, as consultas filtram só pelo id do baralho.
+    exigirBaralho idBaralho = idDoUsuario >>= \idUsuario -> buscarDoUsuario idUsuario idBaralho >> pure ()
 
-    cartoes bid = do
-        exigirBaralho bid
-        banco pool (\conn -> listarCartoes conn bid)
+    cartoes idBaralho = do
+        exigirBaralho idBaralho
+        banco pool (\conn -> listarCartoes conn idBaralho)
 
-    novoCartao bid dados = do
-        u <- uid
-        nc <- validar (validarNovoCartao dados)
-        _ <- buscarDa u bid
-        banco pool (\conn -> hoje >>= \d -> criarCartao conn bid d nc)
+    novoCartao idBaralho dados = do
+        idUsuario <- idDoUsuario
+        cartaoNovo <- validar (validarNovoCartao dados)
+        _ <- buscarDoUsuario idUsuario idBaralho
+        banco pool (\conn -> hoje >>= \dia -> criarCartao conn idBaralho dia cartaoNovo)
 
-    editar cid dados = do
-        u <- uid
-        nc <- validar (validarNovoCartao dados)
-        banco pool (\conn -> editarCartao conn u cid nc) >>= encontrado semCartao
+    editarCartaoDaConta idCartao dados = do
+        idUsuario <- idDoUsuario
+        cartaoEditado <- validar (validarNovoCartao dados)
+        banco pool (\conn -> editarCartao conn idUsuario idCartao cartaoEditado) >>= encontrado semCartao
 
-    excluirC cid = do
-        u <- uid
-        banco pool (\conn -> excluirCartao conn u cid) >>= excluido semCartao
+    excluirCartaoDaConta idCartao = do
+        idUsuario <- idDoUsuario
+        banco pool (\conn -> excluirCartao conn idUsuario idCartao) >>= excluido semCartao
 
-    revisar bid = do
-        exigirBaralho bid
+    revisar idBaralho = do
+        exigirBaralho idBaralho
         banco pool $ \conn -> do
-            d <- hoje
-            map (paraRevisar d) <$> cartoesParaRevisar conn bid d
+            dia <- hoje
+            map (paraRevisar dia) <$> cartoesParaRevisar conn idBaralho dia
 
     revisarTudo = do
-        u <- uid
+        idUsuario <- idDoUsuario
         banco pool $ \conn -> do
-            d <- hoje
-            map (paraRevisar d) <$> cartoesParaRevisarDaConta conn u d
+            dia <- hoje
+            map (paraRevisar dia) <$> cartoesParaRevisarDaConta conn idUsuario dia
 
-    estatisticas bid = do
-        exigirBaralho bid
+    estatisticas idBaralho = do
+        exigirBaralho idBaralho
         banco pool $ \conn -> do
-            d <- hoje
+            dia <- hoje
             tz <- getCurrentTimeZone
-            calcularEstatisticas d <$> listarCartoes conn bid <*> notasDoBaralho conn tz bid
+            calcularEstatisticas dia <$> listarCartoes conn idBaralho <*> notasDoBaralho conn tz idBaralho
 
-    -- A nota é validada antes de qualquer consulta ao cartão: nota inválida nunca toca o banco.
-    responderCartao cid dados = do
-        u <- uid
+    -- A nota é validada antes de buscar o cartão, então uma nota inválida nunca chega a consultar o banco.
+    responderCartao idCartao dados = do
+        idUsuario <- idDoUsuario
         nota <- validar (validarResposta dados)
-        c <- banco pool (\conn -> buscarCartao conn u cid) >>= encontrado semCartao
-        d <- liftIO hoje
-        gravado <- banco pool (\conn -> registrarResposta conn c nota (responder nota d (estadoDoCartao c)))
+        cartao <- banco pool (\conn -> buscarCartao conn idUsuario idCartao) >>= encontrado semCartao
+        dia <- liftIO hoje
+        gravado <- banco pool (\conn -> registrarResposta conn cartao nota (responder nota dia (estadoDoCartao cartao)))
         case gravado of
-            Just novo -> pure novo
-            Nothing   -> banco pool (\conn -> buscarCartao conn u cid)
+            Just atualizado -> pure atualizado
+            -- O cartão mudou entre a leitura e a gravação. Se ele ainda existe, foi respondido em outro lugar (409).
+            Nothing -> banco pool (\conn -> buscarCartao conn idUsuario idCartao)
                 >>= encontrado semCartao
                 >>= \_ -> falhar err409 "o cartão já foi respondido em outra sessão"

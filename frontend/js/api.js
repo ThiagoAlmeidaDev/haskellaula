@@ -1,6 +1,6 @@
-/* Cliente da API: toda chamada passa por api(), que lança Error com o "erro" do JSON quando a
-   resposta não é 2xx. O cookie de sessão é HttpOnly e vai sozinho; um 401 fora das rotas de
-   conta avisa o app (evento recall:sem-sessao) para levar a pessoa ao login. */
+/* Cliente da API. Toda chamada passa por api(), que lança um Error com o campo "erro" do JSON
+   quando a resposta não é 2xx. O cookie de sessão é HttpOnly e vai sozinho. Um 401 fora das
+   rotas de conta dispara o evento recall:sem-sessao, para o app mandar a pessoa para o login. */
 
 const ROTAS_DE_CONTA = ['/api/sessao', '/api/contas'];
 
@@ -43,26 +43,26 @@ export async function api(method, path, body, { signal } = {}) {
 }
 
 export const conta = {
-  atual: (opts) => api('GET', '/api/sessao', undefined, opts),
+  atual: (opcoes) => api('GET', '/api/sessao', undefined, opcoes),
   entrar: (dados) => api('POST', '/api/sessao', dados),
   criar: (dados) => api('POST', '/api/contas', dados),
   sair: () => api('DELETE', '/api/sessao'),
-  resumo: (opts) => api('GET', '/api/resumo', undefined, opts),
-  preferencias: (opts) => api('GET', '/api/preferencias', undefined, opts),
+  resumo: (opcoes) => api('GET', '/api/resumo', undefined, opcoes),
+  preferencias: (opcoes) => api('GET', '/api/preferencias', undefined, opcoes),
   salvarPreferencias: (dados) => api('PUT', '/api/preferencias', dados),
 };
 
 export const baralhos = {
-  listar: (opts) => api('GET', '/api/baralhos', undefined, opts),
-  buscar: (id, opts) => api('GET', `/api/baralhos/${id}`, undefined, opts),
+  listar: (opcoes) => api('GET', '/api/baralhos', undefined, opcoes),
+  buscar: (id, opcoes) => api('GET', `/api/baralhos/${id}`, undefined, opcoes),
   criar: (dados) => api('POST', '/api/baralhos', dados),
   editar: (id, dados) => api('PUT', `/api/baralhos/${id}`, dados),
   excluir: (id) => api('DELETE', `/api/baralhos/${id}`),
-  cartoes: (id, opts) => api('GET', `/api/baralhos/${id}/cartoes`, undefined, opts),
+  cartoes: (id, opcoes) => api('GET', `/api/baralhos/${id}/cartoes`, undefined, opcoes),
   criarCartao: (id, dados) => api('POST', `/api/baralhos/${id}/cartoes`, dados),
-  revisar: (id, opts) => api('GET', `/api/baralhos/${id}/revisar`, undefined, opts),
-  revisarTudo: (opts) => api('GET', '/api/revisar', undefined, opts),
-  estatisticas: (id, opts) => api('GET', `/api/baralhos/${id}/estatisticas`, undefined, opts),
+  revisar: (id, opcoes) => api('GET', `/api/baralhos/${id}/revisar`, undefined, opcoes),
+  revisarTudo: (opcoes) => api('GET', '/api/revisar', undefined, opcoes),
+  estatisticas: (id, opcoes) => api('GET', `/api/baralhos/${id}/estatisticas`, undefined, opcoes),
 };
 
 export const cartoes = {

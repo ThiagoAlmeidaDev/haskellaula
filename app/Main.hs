@@ -21,7 +21,7 @@ main :: IO ()
 main = do
     url <- fromMaybe urlPadrao <$> lookupEnv "DATABASE_URL"
     pool <- newPool (defaultPoolConfig (connectPostgreSQL (BS.pack url)) close 60 10)
-    -- Falha na subida, e não na primeira requisição, se o banco não estiver de pé.
+    -- Consulta o banco logo na subida, para o servidor falhar na hora se o banco estiver fora do ar.
     _ <- withResource pool (\conn -> query_ conn "SELECT 1" :: IO [Only Int])
     putStrLn "Serving on port 8080"
     run 8080 (aplicacao pool)

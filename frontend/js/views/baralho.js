@@ -1,6 +1,6 @@
-/* Página de um baralho: o que fazer agora (estudar os devidos ou adicionar cartões), o domínio
-   do baralho, filtros por etapa e busca, e os cartões em linhas com editar e excluir visíveis.
-   Adicionar e editar acontecem na gaveta lateral; colar lista ou importar um arquivo cria vários
+/* Página de um baralho. Mostra os botões para estudar os cartões devidos ou adicionar cartões,
+   o domínio do baralho, filtros por etapa, a busca e a lista de cartões com editar e excluir.
+   Adicionar e editar abrem na gaveta lateral. Colar uma lista ou importar um arquivo cria vários
    cartões de uma vez, e exportar baixa os cartões em CSV ou TXT. */
 import { baralhos as apiBaralhos, cartoes as apiCartoes } from '../api.js';
 import { h, icone, kbd, plural, toast, confirmar, diasAte, quandoRevisar, semAcento, digitando, baixarArquivo } from '../dom.js';
@@ -13,14 +13,14 @@ import { abrirGavetaBaralho, confirmarExclusaoBaralho } from './baralhos.js';
 
 const FILTROS = [
   { chave: 'todos', rotulo: 'Todos', aceita: () => true },
-  { chave: 'hoje', rotulo: 'Para hoje', aceita: (c) => diasAte(c.proximaRevisao) <= 0 },
-  { chave: 'novo', rotulo: 'Novos', aceita: (c) => c.etapa === 'novo' },
-  { chave: 'aprendendo', rotulo: 'Aprendendo', aceita: (c) => c.etapa === 'aprendendo' },
-  { chave: 'dominado', rotulo: 'Dominados', aceita: (c) => c.etapa === 'dominado' },
+  { chave: 'hoje', rotulo: 'Para hoje', aceita: (cartao) => diasAte(cartao.proximaRevisao) <= 0 },
+  { chave: 'novo', rotulo: 'Novos', aceita: (cartao) => cartao.etapa === 'novo' },
+  { chave: 'aprendendo', rotulo: 'Aprendendo', aceita: (cartao) => cartao.etapa === 'aprendendo' },
+  { chave: 'dominado', rotulo: 'Dominados', aceita: (cartao) => cartao.etapa === 'dominado' },
 ];
 
-/* Uma linha por cartão; frente e verso separados pelo primeiro tab, ponto e vírgula ou " - ".
-   Linha sem separador ou com um lado vazio vira inválida e não é enviada. */
+/* Cada linha vira um cartão, com frente e verso separados pelo primeiro tab, ponto e vírgula
+   ou " - ". Linha sem separador ou com um dos lados vazio fica marcada como inválida e não é enviada. */
 export function lerLista(texto) {
   return texto.split(/\r?\n/).map((bruta) => bruta.trim()).filter(Boolean).map((linha) => {
     const achou = /\t|;| - /.exec(linha);
@@ -41,9 +41,9 @@ function areaTexto(id, valor = '', linhas = 3) {
 function enterEnvia(form, campos) {
   campos.forEach((campoTexto, i) => {
     const proximo = campos[i + 1];
-    campoTexto.addEventListener('keydown', (e) => {
-      if (e.key !== 'Enter' || e.shiftKey || e.isComposing) return;
-      e.preventDefault();
+    campoTexto.addEventListener('keydown', (evento) => {
+      if (evento.key !== 'Enter' || evento.shiftKey || evento.isComposing) return;
+      evento.preventDefault();
       if (proximo && !proximo.value.trim()) proximo.focus();
       else form.requestSubmit();
     });
@@ -75,9 +75,9 @@ export async function renderBaralho(main, { id }, { signal }) {
 
   function etapasLocais() {
     return {
-      novos: lista.filter((c) => c.etapa === 'novo').length,
-      aprendendo: lista.filter((c) => c.etapa === 'aprendendo').length,
-      dominados: lista.filter((c) => c.etapa === 'dominado').length,
+      novos: lista.filter((cartao) => cartao.etapa === 'novo').length,
+      aprendendo: lista.filter((cartao) => cartao.etapa === 'aprendendo').length,
+      dominados: lista.filter((cartao) => cartao.etapa === 'dominado').length,
     };
   }
 
@@ -109,10 +109,10 @@ export async function renderBaralho(main, { id }, { signal }) {
   }
 
   function desenharAbas() {
-    abas.replaceChildren(...FILTROS.map((f) => h('button', {
-      class: 'aba', type: 'button', 'aria-pressed': String(f.chave === filtro),
-      onclick: () => { filtro = f.chave; desenharAbas(); desenharLista(); },
-    }, f.rotulo, h('span', { class: 'mono' }, String(lista.filter(f.aceita).length)))));
+    abas.replaceChildren(...FILTROS.map((opcao) => h('button', {
+      class: 'aba', type: 'button', 'aria-pressed': String(opcao.chave === filtro),
+      onclick: () => { filtro = opcao.chave; desenharAbas(); desenharLista(); },
+    }, opcao.rotulo, h('span', { class: 'mono' }, String(lista.filter(opcao.aceita).length)))));
   }
 
   function desenharLista({ destacar } = {}) {
@@ -125,7 +125,7 @@ export async function renderBaralho(main, { id }, { signal }) {
           h('button', { class: 'btn btn-sec', type: 'button', onclick: () => abrirAdicionar('lista') }, icone('lista'), 'Colar uma lista'))));
       return;
     }
-    const regra = FILTROS.find((f) => f.chave === filtro);
+    const regra = FILTROS.find((opcao) => opcao.chave === filtro);
     const termo = busca.value.trim();
     const visiveis = cartoesVisiveis();
     if (visiveis.length === 0) {
@@ -137,29 +137,29 @@ export async function renderBaralho(main, { id }, { signal }) {
     }
     grade.replaceChildren(
       h('li', { class: 'lista-cabeca', 'aria-hidden': 'true' }, h('span', {}, 'Frente'), h('span', {}, 'Verso'), h('span', {}, 'Etapa e revisão'), h('span', {})),
-      ...visiveis.map((c) => linhaCartao(c, destacar?.has(c.id))));
+      ...visiveis.map((cartao) => linhaCartao(cartao, destacar?.has(cartao.id))));
   }
 
   function cartoesVisiveis() {
-    const regra = FILTROS.find((f) => f.chave === filtro);
+    const regra = FILTROS.find((opcao) => opcao.chave === filtro);
     const termo = semAcento(busca.value.trim());
     return [...lista].reverse()
       .filter(regra.aceita)
-      .filter((c) => !termo || semAcento(`${c.frente} ${c.verso}`).includes(termo));
+      .filter((cartao) => !termo || semAcento(`${cartao.frente} ${cartao.verso}`).includes(termo));
   }
 
-  function linhaCartao(c, destacado) {
-    const devido = diasAte(c.proximaRevisao) <= 0;
-    return h('li', { class: destacado ? 'linha-cartao recem-criado' : 'linha-cartao', dataset: { id: c.id } },
-      h('p', { class: 'lc-frente' }, c.frente),
-      h('p', { class: 'lc-verso' }, c.verso),
+  function linhaCartao(cartao, destacado) {
+    const devido = diasAte(cartao.proximaRevisao) <= 0;
+    return h('li', { class: destacado ? 'linha-cartao recem-criado' : 'linha-cartao', dataset: { id: cartao.id } },
+      h('p', { class: 'lc-frente' }, cartao.frente),
+      h('p', { class: 'lc-verso' }, cartao.verso),
       h('div', { class: 'lc-meta' },
-        etapaChip(c.etapa),
-        h('span', { class: devido ? 'mono devido' : 'mono' }, quandoRevisar(c.proximaRevisao))),
+        etapaChip(cartao.etapa),
+        h('span', { class: devido ? 'mono devido' : 'mono' }, quandoRevisar(cartao.proximaRevisao))),
       h('div', { class: 'lc-acoes' },
-        h('button', { class: 'btn-icone', type: 'button', title: 'Editar cartão', 'aria-label': `Editar cartão ${c.frente.slice(0, 40)}`, onclick: () => editarCartao(c) }, icone('lapis')),
-        h('button', { class: 'btn-icone', type: 'button', title: 'Exportar cartão', 'aria-label': `Exportar cartão ${c.frente.slice(0, 40)}`, onclick: () => abrirExportar([c], 'um') }, icone('baixar')),
-        h('button', { class: 'btn-icone perigo', type: 'button', title: 'Excluir cartão', 'aria-label': `Excluir cartão ${c.frente.slice(0, 40)}`, onclick: () => excluirCartao(c) }, icone('lixo'))));
+        h('button', { class: 'btn-icone', type: 'button', title: 'Editar cartão', 'aria-label': `Editar cartão ${cartao.frente.slice(0, 40)}`, onclick: () => editarCartao(cartao) }, icone('lapis')),
+        h('button', { class: 'btn-icone', type: 'button', title: 'Exportar cartão', 'aria-label': `Exportar cartão ${cartao.frente.slice(0, 40)}`, onclick: () => abrirExportar([cartao], 'um') }, icone('baixar')),
+        h('button', { class: 'btn-icone perigo', type: 'button', title: 'Excluir cartão', 'aria-label': `Excluir cartão ${cartao.frente.slice(0, 40)}`, onclick: () => excluirCartao(cartao) }, icone('lixo'))));
   }
 
   function atualizarTudo(opcoes) {
@@ -201,7 +201,7 @@ export async function renderBaralho(main, { id }, { signal }) {
 
     function desenharPrevia() {
       const itens = itensAtuais();
-      const validos = itens.filter((i) => i.valida);
+      const validos = itens.filter((item) => item.valida);
       const motivo = modo === 'arquivo' ? 'sem frente ou verso' : 'sem separador';
       const enviar = gaveta?.form.querySelector('button[type="submit"]');
       if (enviar) {
@@ -211,9 +211,9 @@ export async function renderBaralho(main, { id }, { signal }) {
       if (!itens.length) { previa.replaceChildren(); return; }
       previa.replaceChildren(
         h('p', { class: 'campo-rotulo' }, `Prévia: ${plural(validos.length, 'cartão', 'cartões')}${itens.length > validos.length ? `, ${itens.length - validos.length} ${motivo}` : ''}`),
-        h('ul', { class: 'previa-lista' }, itens.slice(0, 50).map((i) => (i.valida
-          ? h('li', {}, h('strong', {}, i.frente), h('span', {}, i.verso))
-          : h('li', { class: 'invalida' }, `${motivo}: ${i.linha}`)))));
+        h('ul', { class: 'previa-lista' }, itens.slice(0, 50).map((item) => (item.valida
+          ? h('li', {}, h('strong', {}, item.frente), h('span', {}, item.verso))
+          : h('li', { class: 'invalida' }, `${motivo}: ${item.linha}`)))));
     }
     colado.addEventListener('input', desenharPrevia);
 
@@ -272,7 +272,7 @@ export async function renderBaralho(main, { id }, { signal }) {
 
     /* Um POST por cartão, em sequência, para manter a ordem da lista e parar no primeiro erro. */
     async function enviarLista(botao) {
-      const validos = itensAtuais().filter((i) => i.valida);
+      const validos = itensAtuais().filter((item) => item.valida);
       if (!validos.length) return;
       botao.disabled = true;
       let feitos = 0;
@@ -299,8 +299,8 @@ export async function renderBaralho(main, { id }, { signal }) {
       titulo: 'Adicionar cartões',
       corpo: [alternador, area],
       rodape,
-      aoEnviar: (e) => {
-        const botao = e.target.querySelector('button[type="submit"]');
+      aoEnviar: (evento) => {
+        const botao = evento.target.querySelector('button[type="submit"]');
         if (modo === 'um') enviarUm(botao);
         else enviarLista(botao);
       },
@@ -309,7 +309,8 @@ export async function renderBaralho(main, { id }, { signal }) {
     ({ um: frente, lista: colado, arquivo }[modo]).focus();
   }
 
-  /* qual: 'todos' oferece todos ou só os que a busca e o filtro mostram; 'um' exporta o cartão. */
+  /* Com qual = 'todos', dá para escolher entre todos os cartões ou só os que a busca e o filtro
+     mostram. Com qual = 'um', exporta só o cartão da linha. */
   function abrirExportar(cartoes, qual) {
     let formato = 'csv';
     let escolha = 'todos';
@@ -317,7 +318,7 @@ export async function renderBaralho(main, { id }, { signal }) {
     const oferecerVisiveis = qual === 'todos' && visiveis.length > 0 && visiveis.length < lista.length;
     const quais = oferecerVisiveis
       ? seletorOpcoes({
-        legenda: 'Quais cartões', nome: 'exportar-quais', valor: escolha, aoMudar: (v) => { escolha = v; },
+        legenda: 'Quais cartões', nome: 'exportar-quais', valor: escolha, aoMudar: (valor) => { escolha = valor; },
         itens: [
           { valor: 'todos', nome: `Todos (${lista.length})` },
           { valor: 'visiveis', nome: `Só os que aparecem agora (${visiveis.length})` },
@@ -325,8 +326,8 @@ export async function renderBaralho(main, { id }, { signal }) {
       }).el
       : null;
     const formatos = seletorOpcoes({
-      legenda: 'Formato', nome: 'exportar-formato', valor: formato, aoMudar: (v) => { formato = v; },
-      itens: Object.entries(FORMATOS).map(([valor, f]) => ({ valor, nome: f.nome })),
+      legenda: 'Formato', nome: 'exportar-formato', valor: formato, aoMudar: (valor) => { formato = valor; },
+      itens: Object.entries(FORMATOS).map(([valor, definicao]) => ({ valor, nome: definicao.nome })),
     });
     abrirGaveta({
       titulo: qual === 'um' ? 'Exportar cartão' : 'Exportar cartões',
@@ -346,9 +347,9 @@ export async function renderBaralho(main, { id }, { signal }) {
     });
   }
 
-  function editarCartao(c) {
-    const frente = areaTexto('editar-frente', c.frente);
-    const verso = areaTexto('editar-verso', c.verso);
+  function editarCartao(cartao) {
+    const frente = areaTexto('editar-frente', cartao.frente);
+    const verso = areaTexto('editar-verso', cartao.verso);
     const salvar = h('button', { class: 'btn btn-pri', type: 'submit' }, 'Salvar');
     const gaveta = abrirGaveta({
       titulo: 'Editar cartão',
@@ -360,15 +361,15 @@ export async function renderBaralho(main, { id }, { signal }) {
       rodape: [
         salvar,
         h('button', { class: 'btn btn-fantasma', type: 'button', onclick: fecharGaveta }, 'Cancelar'),
-        h('button', { class: 'btn btn-perigo btn-sm', type: 'button', style: 'margin-left: auto', onclick: () => { fecharGaveta(); excluirCartao(c); } }, icone('lixo'), 'Excluir'),
+        h('button', { class: 'btn btn-perigo btn-sm', type: 'button', style: 'margin-left: auto', onclick: () => { fecharGaveta(); excluirCartao(cartao); } }, icone('lixo'), 'Excluir'),
       ],
       aoEnviar: async () => {
         if (!frente.value.trim()) { mostrarErroCampo(frente, 'Escreva a frente do cartão'); return; }
         if (!verso.value.trim()) { mostrarErroCampo(verso, 'Escreva o verso do cartão'); return; }
         salvar.disabled = true;
         try {
-          const atualizado = await apiCartoes.editar(c.id, { frente: frente.value.trim(), verso: verso.value.trim() });
-          lista = lista.map((x) => (x.id === atualizado.id ? atualizado : x));
+          const atualizado = await apiCartoes.editar(cartao.id, { frente: frente.value.trim(), verso: verso.value.trim() });
+          lista = lista.map((item) => (item.id === atualizado.id ? atualizado : item));
           fecharGaveta();
           atualizarTudo({ destacar: new Set([atualizado.id]) });
         } catch (erro) {
@@ -380,16 +381,16 @@ export async function renderBaralho(main, { id }, { signal }) {
     enterEnvia(gaveta.form, [frente, verso]);
   }
 
-  async function excluirCartao(c) {
+  async function excluirCartao(cartao) {
     const ok = await confirmar({
       titulo: 'Excluir este cartão?',
-      texto: `“${c.frente.slice(0, 80)}” e o histórico de revisões dele serão apagados.`,
+      texto: `“${cartao.frente.slice(0, 80)}” e o histórico de revisões dele serão apagados.`,
       acao: 'Excluir cartão',
     });
     if (!ok) return;
     try {
-      await apiCartoes.excluir(c.id);
-      lista = lista.filter((x) => x.id !== c.id);
+      await apiCartoes.excluir(cartao.id);
+      lista = lista.filter((item) => item.id !== cartao.id);
       atualizarTudo();
       toast('Cartão excluído.', { tipo: 'ok' });
     } catch (erro) {
@@ -415,10 +416,10 @@ export async function renderBaralho(main, { id }, { signal }) {
     });
   }
 
-  function aoTeclar(e) {
-    if (e.ctrlKey || e.metaKey || e.altKey || digitando(e) || document.querySelector('dialog[open]')) return;
-    if (e.key === 'n' || e.key === 'N') { e.preventDefault(); abrirAdicionar(); }
-    else if (e.key === '/') { e.preventDefault(); busca.focus(); }
+  function aoTeclar(evento) {
+    if (evento.ctrlKey || evento.metaKey || evento.altKey || digitando(evento) || document.querySelector('dialog[open]')) return;
+    if (evento.key === 'n' || evento.key === 'N') { evento.preventDefault(); abrirAdicionar(); }
+    else if (evento.key === '/') { evento.preventDefault(); busca.focus(); }
   }
 
   busca.addEventListener('input', () => desenharLista());
