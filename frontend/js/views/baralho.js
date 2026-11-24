@@ -91,12 +91,12 @@ export async function renderBaralho(main, { id }, { signal }) {
     acoes.replaceChildren(
       paraHoje > 0
         ? h('a', { class: 'btn btn-pri', href: `#/estudar/${id}` }, 'Estudar', h('span', { class: 'btn-contagem' }, String(paraHoje)))
-        : null,
+        : '',
       h('button', { class: paraHoje > 0 ? 'btn btn-sec' : 'btn btn-pri', type: 'button', onclick: () => abrirAdicionar(), 'aria-keyshortcuts': 'N' }, icone('mais'), 'Adicionar cartões'),
       h('button', { class: 'btn btn-fantasma', type: 'button', onclick: editarBaralho }, icone('lapis'), 'Editar baralho'),
       h('button', { class: 'btn btn-fantasma', type: 'button', onclick: () => abrirAdicionar('arquivo') }, icone('subir'), 'Importar'),
-      lista.length ? h('button', { class: 'btn btn-fantasma', type: 'button', onclick: () => abrirExportar(lista, 'todos') }, icone('baixar'), 'Exportar') : null,
-      lista.length ? h('a', { class: 'btn btn-fantasma', href: `#/estatisticas/${id}` }, icone('grafico'), 'Estatísticas') : null);
+      lista.length ? h('button', { class: 'btn btn-fantasma', type: 'button', onclick: () => abrirExportar(lista, 'todos') }, icone('baixar'), 'Exportar') : '',
+      lista.length ? h('a', { class: 'btn btn-fantasma', href: `#/estatisticas/${id}` }, icone('grafico'), 'Estatísticas') : '');
     const etapas = etapasLocais();
     dominio.replaceChildren(
       h('div', { style: 'display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px; align-items: baseline' },
